@@ -7,6 +7,7 @@ import CharacterCreator from './components/CharacterCreator';
 import EmojiOverlay from './components/EmojiOverlay';
 import { MultiplayerProvider } from './components/MultiplayerProvider';
 import EmojiButton from './components/EmojiButton';
+import { PlayerList } from './components/PlayerList';
 
 const keyboardMap = [
   { name: "forward", keys: ["ArrowUp", "KeyW"] },
@@ -46,6 +47,7 @@ function App() {
   return (
     <>
       <MultiplayerProvider characterColor={characterColor} position={[0, 2, 0]}>
+        <PlayerList />
         <KeyboardControls map={keyboardMap}>
           <Canvas
             shadows

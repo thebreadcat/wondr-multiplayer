@@ -6,6 +6,7 @@ import { Map } from "./Map";
 import { MultiplayerProvider, useMultiplayer } from "./MultiplayerProvider";
 import { Character } from "./Character";
 import RemotePlayer from "./RemotePlayer";
+import { PlayerList } from './PlayerList';
 
 const maps = {
   castle_on_hills: {
@@ -100,7 +101,6 @@ export const Experience = ({ characterColor }) => {
 
   return (
     <>
-      {/* <OrbitControls /> */}
       <Environment preset="sunset" />
       <directionalLight
         intensity={0.65}

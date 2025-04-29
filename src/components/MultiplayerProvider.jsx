@@ -11,7 +11,6 @@ export function MultiplayerProvider({ characterColor, position, children }) {
   const socketRef = useRef();
   const playerCountRef = useRef(0);
   const prevColorRef = useRef(characterColor);
-  const idleTimerRef = useRef(null);
 
   // Force resend idle animation when needed
   const resendMyAnimation = useCallback(() => {
@@ -36,40 +35,6 @@ export function MultiplayerProvider({ characterColor, position, children }) {
         ...moveData
       }
     }));
-  }, [players]);
-
-  // Set up idle timer
-  const resetIdleTimer = useCallback(() => {
-    if (idleTimerRef.current) {
-      clearTimeout(idleTimerRef.current);
-    }
-
-    idleTimerRef.current = setTimeout(() => {
-      const id = socketRef.current?.id;
-      if (!id) return;
-
-      const player = players[id];
-      if (!player) return;
-
-      // Only set to idle if we're not already idle
-      if (player.animation !== 'idle') {
-        const moveData = {
-          position: player.position,
-          rotation: player.rotation,
-          animation: 'idle'
-        };
-
-        socketRef.current.emit('move', moveData);
-        
-        setPlayers(prev => ({
-          ...prev,
-          [id]: {
-            ...prev[id],
-            ...moveData
-          }
-        }));
-      }
-    }, 5000); // 5 seconds of no movement before idle
   }, [players]);
 
   // Request a full resync from the server
@@ -226,9 +191,6 @@ export function MultiplayerProvider({ characterColor, position, children }) {
 
     return () => {
       clearInterval(emojiInterval);
-      if (idleTimerRef.current) {
-        clearTimeout(idleTimerRef.current);
-      }
       socket.disconnect();
     };
   }, [characterColor, position, requestResync]);
@@ -260,9 +222,7 @@ export function MultiplayerProvider({ characterColor, position, children }) {
 
   const sendMove = useCallback(({ position, animation, rotation }) => {
     if (!socketRef.current) return;
-    
     const moveData = { position, animation, rotation };
-    
     setPlayers(prev => ({
       ...prev,
       [socketRef.current.id]: {
@@ -271,12 +231,8 @@ export function MultiplayerProvider({ characterColor, position, children }) {
         color: characterColor
       }
     }));
-    
     socketRef.current.emit('move', moveData);
-
-    // Reset idle timer on movement
-    resetIdleTimer();
-  }, [characterColor, resetIdleTimer]);
+  }, [characterColor]);
 
   const sendEmoji = (emoji) => {
     if (!socketRef.current) return;
