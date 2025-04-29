@@ -46,11 +46,12 @@ io.on('connection', (socket) => {
       players[socket.id].position = data.position;
       if (data.animation) players[socket.id].animation = data.animation;
       if (typeof data.rotation === 'number') players[socket.id].rotation = data.rotation;
-      console.log('Player moved:', socket.id, data);
+      //console.log('Player moved:', socket.id, data);
       // Broadcast updated state
       socket.broadcast.emit('player-moved', {
         id: socket.id,
         position: data.position,
+        color: data.color,
         animation: data.animation,
         rotation: data.rotation,
       });

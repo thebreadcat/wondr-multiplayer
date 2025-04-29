@@ -33,17 +33,18 @@ const maps = {
 const defaultPosition = [0, 0.8, 0];
 function RemotePlayersPool() {
   const { players, myId } = useMultiplayer();
+  
+  // Create a stable array of remote players
+  const remotePlayers = Object.values(players)
+    .filter(player => player.id !== myId)
+    .map(player => (
+      <RemotePlayer 
+        key={`player-${player.id}`} 
+        player={player} 
+      />
+    ));
 
-  return (
-    <>
-      {Object.values(players)
-        .filter(player => player.id !== myId)
-        .map((player) => (
-          <RemotePlayer key={player.id} player={player} />
-        ))
-      }
-    </>
-  );
+  return <>{remotePlayers}</>;
 }
 
 export const Experience = ({ characterColor }) => {
