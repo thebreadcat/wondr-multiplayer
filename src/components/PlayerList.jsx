@@ -7,7 +7,7 @@ export function PlayerList() {
   return (
     <div style={{
       position: 'fixed',
-      top: 20,
+      bottom: 20,
       right: 20,
       background: 'rgba(0, 0, 0, 0.7)',
       padding: '15px',
@@ -15,7 +15,8 @@ export function PlayerList() {
       color: 'white',
       fontFamily: 'Arial, sans-serif',
       minWidth: '200px',
-      zIndex: 1000
+      zIndex: 1000,
+      pointerEvents: 'none' // Allow clicking through the player list
     }}>
       <h3 style={{ 
         margin: '0 0 10px 0',

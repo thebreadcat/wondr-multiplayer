@@ -53,25 +53,29 @@ export const Experience = ({ characterColor }) => {
   const shadowCameraRef = useRef();
   const map = "animal_crossing_map";
   const [localPosition, setLocalPosition] = useState(defaultPosition);
-  // idle timeout state
   const [idle, setIdle] = useState(false);
   const lastActiveTimeRef = useRef(Date.now());
 
-  // reset activity timer when player moves
+  // Reset idle timer whenever position changes
   useEffect(() => {
     lastActiveTimeRef.current = Date.now();
+    setIdle(false);
   }, [localPosition]);
 
-  // check for inactivity
+  // Check for idle state
   useEffect(() => {
-    if (idle) return;
-    const interval = setInterval(() => {
-      if (Date.now() - lastActiveTimeRef.current > 60000) {
+    const idleCheck = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastActivity = now - lastActiveTimeRef.current;
+      
+      // Set to idle after 5 minutes of inactivity
+      if (timeSinceLastActivity > 5 * 60 * 1000) {
         setIdle(true);
       }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [idle]);
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(idleCheck);
+  }, []);
 
   // Add emoji keyboard shortcuts
   useEffect(() => {
@@ -94,7 +98,6 @@ export const Experience = ({ characterColor }) => {
   }, [sendEmoji]);
 
   const handleReconnect = () => {
-    // reset and unidle
     lastActiveTimeRef.current = Date.now();
     setIdle(false);
   };

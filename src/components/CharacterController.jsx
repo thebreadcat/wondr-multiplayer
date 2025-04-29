@@ -31,7 +31,7 @@ const lerpAngle = (start, end, t) => {
   return normalizeAngle(start + (end - start) * t);
 };
 
-export function CharacterController({ characterColor }) {
+export function CharacterController({ initialPosition, characterColor, setLocalPosition }) {
   const rigidBody = useRef();
   const character = useRef();
   const container = useRef();
@@ -52,6 +52,9 @@ export function CharacterController({ characterColor }) {
   const lastPosition = useRef([0, 0, 0]);
   const wasJumpPressed = useRef(false);
   const isClicking = useRef(false);
+
+  // Track current position for respawn
+  const currentPosition = useRef(initialPosition);
 
   useEffect(() => {
     const onMouseDown = () => { isClicking.current = true; };
@@ -148,6 +151,29 @@ export function CharacterController({ characterColor }) {
         cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, 0.1);
         state.camera.lookAt(cameraLookAt.current);
       }
+    }
+
+    // Get current position
+    const worldPosition = position;
+    currentPosition.current = [worldPosition.x, worldPosition.y, worldPosition.z];
+
+    // Check if fallen too far
+    if (worldPosition.y < -25) {
+      // Respawn at initial position
+      rigidBody.current.setTranslation({ x: initialPosition[0], y: initialPosition[1], z: initialPosition[2] });
+      rigidBody.current.setLinvel({ x: 0, y: 0, z: 0 }); // Reset velocity
+      rigidBody.current.setAngvel({ x: 0, y: 0, z: 0 }); // Reset angular velocity
+      
+      // Update position in multiplayer
+      sendMove({
+        position: initialPosition,
+        animation: 'idle',
+        rotation: characterRotationTarget.current,
+      });
+      
+      // Update local position state
+      setLocalPosition(initialPosition);
+      return;
     }
   });
 

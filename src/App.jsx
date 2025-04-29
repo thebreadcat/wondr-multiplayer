@@ -47,7 +47,6 @@ function App() {
   return (
     <>
       <MultiplayerProvider characterColor={characterColor} position={[0, 2, 0]}>
-        <PlayerList />
         <KeyboardControls map={keyboardMap}>
           <Canvas
             shadows
@@ -65,6 +64,9 @@ function App() {
         </div>
         <div style={{ position: 'fixed', bottom: 20, left: 20, zIndex: 1000 }}>
           <EmojiButton />
+        </div>
+        <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 1000 }}>
+          <PlayerList />
         </div>
         {showCreator && (
           <CharacterCreator

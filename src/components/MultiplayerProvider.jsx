@@ -90,30 +90,56 @@ export function MultiplayerProvider({ characterColor, position, children }) {
 
     socket.on('players', (serverPlayers) => {      
       setPlayers(prev => {
+        // Create new state with server data
         const newState = { ...serverPlayers };
+        
+        // Always preserve our own state if we exist
         if (socket.id && prev[socket.id]) {
           newState[socket.id] = {
             ...prev[socket.id],
             color: characterColor
           };
         }
+
+        // Ensure all players have an animation state
         Object.keys(newState).forEach(playerId => {
-          newState[playerId].animation = newState[playerId].animation || 'idle';
+          if (!newState[playerId]) return;
+          newState[playerId] = {
+            ...newState[playerId],
+            animation: newState[playerId].animation || 'idle'
+          };
         });
+
+        // Debug log
+        console.log('Players update:', {
+          myId: socket.id,
+          playerCount: Object.keys(newState).length,
+          players: newState
+        });
+
         return newState;
       });
     });
 
-    socket.on('player-joined', (player) => {
-      if (player.id === socket.id) return;
+    socket.on('player-joined', (player) => {      
       setPlayers(prev => {
+        // Don't process our own join event
+        if (player.id === socket.id) return prev;
+
+        // Only add if player doesn't exist
         if (prev[player.id]) return prev;
+
+        // Debug log
+        console.log('Player joined:', {
+          joinedId: player.id,
+          myId: socket.id
+        });
+
         return {
           ...prev,
           [player.id]: {
             ...player,
-            animation: 'idle',
-            color: player.color
+            animation: 'idle'
           }
         };
       });
@@ -135,12 +161,20 @@ export function MultiplayerProvider({ characterColor, position, children }) {
       });
     });
 
-    socket.on('player-left', (playerId) => {
+    socket.on('player-left', (playerId) => {      
       setPlayers(prev => {
+        // Debug log
+        console.log('Player left:', {
+          leftId: playerId,
+          myId: socket.id,
+          remainingPlayers: Object.keys(prev).filter(id => id !== playerId)
+        });
+
         const newState = { ...prev };
         delete newState[playerId];
         return newState;
       });
+      
       setEmojis(prev => {
         const next = { ...prev };
         delete next[playerId];
