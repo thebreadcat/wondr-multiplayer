@@ -11,6 +11,7 @@ import styles from './RemotePlayer.module.css';
 const WALK_SPEED = 2.5;
 const RUN_SPEED = 5;
 const ROTATION_SPEED = 0.1;
+const VERTICAL_OFFSET = -0.18; // Character's vertical offset from the ground
 
 const normalizeAngle = (angle) => {
   while (angle > Math.PI) angle -= 2 * Math.PI;
@@ -38,6 +39,13 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
   const [, getKeys] = useKeyboardControls();
   const { sendMove, sendEmoji, emoji, myId } = useMultiplayer();
 
+  // Add initial position with offset
+  const adjustedInitialPosition = [
+    initialPosition[0],
+    initialPosition[1] + VERTICAL_OFFSET,
+    initialPosition[2]
+  ];
+
   const [isOnGround, setIsOnGround] = useState(false);
   const [animationState, setAnimationState] = useState("idle");
 
@@ -53,8 +61,8 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
   const wasJumpPressed = useRef(false);
   const isClicking = useRef(false);
 
-  // Track current position for respawn
-  const currentPosition = useRef(initialPosition);
+  // Track current position for respawn with offset
+  const currentPosition = useRef(adjustedInitialPosition);
 
   useEffect(() => {
     const onMouseDown = () => { isClicking.current = true; };
@@ -123,7 +131,11 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       );
     }
 
-    const currentPos = [position.x, position.y, position.z];
+    const currentPos = [
+      position.x, 
+      position.y, 
+      position.z
+    ];
     const hasMoved = currentPos.some((v, i) => Math.abs(v - lastPosition.current[i]) > 0.01);
 
     if (hasMoved) {
@@ -136,21 +148,38 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       });
     }
 
+    // Calculate movement speed for camera adjustments
+    const movementSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+    const isWalking = movementSpeed > 0.1 && movementSpeed < 4;
+    const isRunning = movementSpeed >= 4;
+
+    // Adjust camera follow speed based on movement
+    let cameraSpeed = 0.1; // Default camera speed
+    if (isRunning) {
+      cameraSpeed = 0.05; // Slower camera movement when running
+    } else if (isWalking) {
+      cameraSpeed = 0.08; // Medium camera speed when walking
+    }
+
+    // Update container rotation (camera orbit point)
     if (container.current) {
       container.current.rotation.y = MathUtils.lerp(
         container.current.rotation.y,
         rotationTarget.current,
-        0.1
+        cameraSpeed
       );
-      if (cameraPosition.current) {
-        cameraPosition.current.getWorldPosition(cameraWorldPosition.current);
-        state.camera.position.lerp(cameraWorldPosition.current, 0.1);
-      }
-      if (cameraTarget.current) {
-        cameraTarget.current.getWorldPosition(cameraLookAtWorldPosition.current);
-        cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, 0.1);
-        state.camera.lookAt(cameraLookAt.current);
-      }
+    }
+
+    // Update camera position using refs
+    if (cameraPosition.current && cameraTarget.current) {
+      // Get world positions
+      cameraPosition.current.getWorldPosition(cameraWorldPosition.current);
+      cameraTarget.current.getWorldPosition(cameraLookAtWorldPosition.current);
+
+      // Smoothly move camera
+      state.camera.position.lerp(cameraWorldPosition.current, cameraSpeed);
+      cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, cameraSpeed);
+      state.camera.lookAt(cameraLookAt.current);
     }
 
     // Get current position
@@ -159,20 +188,22 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
 
     // Check if fallen too far
     if (worldPosition.y < -25) {
-      // Respawn at initial position
-      rigidBody.current.setTranslation({ x: initialPosition[0], y: initialPosition[1], z: initialPosition[2] });
-      rigidBody.current.setLinvel({ x: 0, y: 0, z: 0 }); // Reset velocity
-      rigidBody.current.setAngvel({ x: 0, y: 0, z: 0 }); // Reset angular velocity
+      // Respawn at initial position with offset
+      rigidBody.current.setTranslation({ 
+        x: adjustedInitialPosition[0], 
+        y: adjustedInitialPosition[1], 
+        z: adjustedInitialPosition[2] 
+      });
+      rigidBody.current.setLinvel({ x: 0, y: 0, z: 0 });
+      rigidBody.current.setAngvel({ x: 0, y: 0, z: 0 });
       
-      // Update position in multiplayer
       sendMove({
-        position: initialPosition,
+        position: adjustedInitialPosition,
         animation: 'idle',
         rotation: characterRotationTarget.current,
       });
       
-      // Update local position state
-      setLocalPosition(initialPosition);
+      setLocalPosition(adjustedInitialPosition);
       return;
     }
   });
@@ -183,7 +214,7 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       colliders={false}
       mass={1}
       type="dynamic"
-      position={[0, 2, 0]}
+      position={adjustedInitialPosition}
       enabledRotations={[false, false, false]}
       onCollisionEnter={() => {
         setIsOnGround(true);
@@ -194,18 +225,18 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       onCollisionExit={() => setIsOnGround(false)}
     >
       <group ref={container}>
-        <group ref={cameraTarget} position-z={1.5} />
-        <group ref={cameraPosition} position-y={4} position-z={-4} />
+        <group ref={cameraTarget} position-z={1.5} position-y={1 + VERTICAL_OFFSET} />
+        <group ref={cameraPosition} position-y={3 + VERTICAL_OFFSET} position-z={-5} />
         <group ref={character}>
           <Character color={characterColor} animation={animationState} />
           {emoji && (
-            <Html position={[0, 1, 0]} center distanceFactor={8}>
+            <Html position={[0, 1 + VERTICAL_OFFSET, 0]} center distanceFactor={8}>
               <div className={styles.emojiContainer}>{emoji}</div>
             </Html>
           )}
         </group>
       </group>
-      <CapsuleCollider args={[0.3, 0.3]} position={[0, 0.8, 0]} />
+      <CapsuleCollider args={[0.3, 0.3]} position={[0, 0.8 + VERTICAL_OFFSET, 0]} />
     </RigidBody>
   );
 }

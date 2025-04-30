@@ -141,7 +141,7 @@ export const Experience = ({ characterColor }) => {
       )}
       {idle && (
         <Html fullscreen>
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto' }}>
+          <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, right: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto' }}>
             <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
               <p>You have been idle for a while.</p>
               <button onClick={handleReconnect}>Reconnect</button>
