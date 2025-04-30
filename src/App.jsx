@@ -19,25 +19,51 @@ const keyboardMap = [
   { name: "jump", keys: ["Space"] },
 ];
 
+// Import color options from CharacterCreator
+const COLORS = [
+  '#FF0000', '#FF7F00', '#FFFF00', '#7FFF00',
+  '#00FF00', '#00FF7F', '#00FFFF', '#007FFF',
+  '#0000FF', '#7F00FF', '#FF00FF', '#FF007F',
+  '#803300', '#336633', '#333380', '#808080',
+];
+
 function App() {
   // Cookie helpers
   function getCookie(name) {
     const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
     return match ? decodeURIComponent(match[2]) : null;
   }
+  
+  function setCookie(name, value) {
+    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=31536000`; // 1 year expiry
+  }
+
+  // Get a random color from available options
+  function getRandomColor() {
+    return COLORS[Math.floor(Math.random() * COLORS.length)];
+  }
 
   const [showCreator, setShowCreator] = useState(false);
-  const [characterColor, setCharacterColor] = useState('#66FF66');
+  const [characterColor, setCharacterColor] = useState(getRandomColor()); // Default to random
 
-  // On mount, read color from cookie
+  // On mount, read color from cookie or assign random color
   useEffect(() => {
     const cookieColor = getCookie('characterColor');
-    if (cookieColor) setCharacterColor(cookieColor);
+    
+    if (cookieColor) {
+      // Use saved color preference
+      setCharacterColor(cookieColor);
+    } else {
+      // Assign and save random color for new users
+      const randomColor = getRandomColor();
+      setCharacterColor(randomColor);
+      setCookie('characterColor', randomColor);
+    }
   }, []);
 
   function handleSaveColor(color) {
     setCharacterColor(color);
-    document.cookie = `characterColor=${encodeURIComponent(color)}; path=/; max-age=31536000`;
+    setCookie('characterColor', color);
     setShowCreator(false);
   }
 
