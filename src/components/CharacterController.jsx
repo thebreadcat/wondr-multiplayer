@@ -60,6 +60,8 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
   const lastPosition = useRef([0, 0, 0]);
   const wasJumpPressed = useRef(false);
   const isClicking = useRef(false);
+  const jumpCooldown = useRef(0);
+  const jumpInProgress = useRef(false);
 
   // Track current position for respawn with offset
   const currentPosition = useRef(adjustedInitialPosition);
@@ -113,11 +115,26 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       if (isOnGround) setAnimationState("idle");
     }
 
-    if (jump && !wasJumpPressed.current && isOnGround) {
-      const jumpVelocity = Math.sqrt(2 * 9.8 * 0.4);
+    // Calculate jump cooldown time (time to go up and come down based on physics)
+    const jumpVelocity = Math.sqrt(2 * 9.8 * 0.4); // sqrt(2 * gravity * jumpHeight)
+    const totalJumpTime = (2 * jumpVelocity) / 9.8; // 2 * initialVelocity / gravity
+
+    // Update jump cooldown timer
+    if (jumpCooldown.current > 0) {
+      jumpCooldown.current -= delta;
+    }
+
+    // Handle jump with cooldown instead of ground check
+    if (jump && !wasJumpPressed.current && jumpCooldown.current <= 0) {
       velocity.y = jumpVelocity;
-      setIsOnGround(false);
+      jumpCooldown.current = totalJumpTime;
+      jumpInProgress.current = true;
       setAnimationState("jump_up");
+      
+      // Still track ground state for animation purposes
+      if (isOnGround) {
+        setIsOnGround(false);
+      }
     }
     wasJumpPressed.current = jump;
 
