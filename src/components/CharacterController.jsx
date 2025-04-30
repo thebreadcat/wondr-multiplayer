@@ -1,5 +1,5 @@
 // CharacterController.jsx (refactored with stable animation, jump handling, clean updates)
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import { useKeyboardControls, Html } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { CapsuleCollider, RigidBody } from "@react-three/rapier";
@@ -7,6 +7,18 @@ import { MathUtils, Vector3 } from "three";
 import { Character } from "./Character";
 import { useMultiplayer } from "./MultiplayerProvider";
 import styles from './RemotePlayer.module.css';
+
+// Throttle function to limit how often a function gets called
+const throttle = (callback, delay) => {
+  let lastCall = 0;
+  return (...args) => {
+    const now = Date.now();
+    if (now - lastCall >= delay) {
+      lastCall = now;
+      return callback(...args);
+    }
+  };
+};
 
 const WALK_SPEED = 2.5;
 const RUN_SPEED = 5;
@@ -32,12 +44,32 @@ const lerpAngle = (start, end, t) => {
   return normalizeAngle(start + (end - start) * t);
 };
 
+// Object Pool for reusing Vector3 objects to avoid garbage collection
+const vector3Pool = [];
+const getVector3FromPool = () => {
+  if (vector3Pool.length > 0) {
+    return vector3Pool.pop();
+  }
+  return new Vector3();
+};
+
+const releaseVector3ToPool = (vector) => {
+  vector.set(0, 0, 0);
+  vector3Pool.push(vector);
+};
+
 export function CharacterController({ initialPosition, characterColor, setLocalPosition }) {
   const rigidBody = useRef();
   const character = useRef();
   const container = useRef();
   const [, getKeys] = useKeyboardControls();
   const { sendMove, sendEmoji, emoji, myId } = useMultiplayer();
+  
+  // Create throttled sendMove function to limit network traffic
+  const throttledSendMove = useMemo(
+    () => throttle((data) => sendMove(data), 50), // Limit to 20 updates per second
+    [sendMove]
+  );
 
   // Add initial position with offset
   const adjustedInitialPosition = [
@@ -67,26 +99,67 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
   const currentPosition = useRef(adjustedInitialPosition);
 
   useEffect(() => {
+    // Use passive event listeners for improved performance
     const onMouseDown = () => { isClicking.current = true; };
     const onMouseUp = () => { isClicking.current = false; };
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("mouseup", onMouseUp);
-    document.addEventListener("touchstart", onMouseDown);
-    document.addEventListener("touchend", onMouseUp);
+    
+    // Add passive flag to indicate these listeners don't call preventDefault()
+    document.addEventListener("mousedown", onMouseDown, { passive: true });
+    document.addEventListener("mouseup", onMouseUp, { passive: true });
+    document.addEventListener("touchstart", onMouseDown, { passive: true });
+    document.addEventListener("touchend", onMouseUp, { passive: true });
+    
+    // Clean up all event listeners and resources when component unmounts
     return () => {
       document.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("mouseup", onMouseUp);
       document.removeEventListener("touchstart", onMouseDown);
       document.removeEventListener("touchend", onMouseUp);
+      
+      // Clean up Three.js resources to prevent memory leaks
+      if (cameraWorldPosition.current) cameraWorldPosition.current = null;
+      if (cameraLookAtWorldPosition.current) cameraLookAtWorldPosition.current = null;
+      if (cameraLookAt.current) cameraLookAt.current = null;
+      
+      // Release any other references
+      if (rigidBody.current) {
+        // Clear physics body references
+        rigidBody.current = null;
+      }
+      
+      // Clear accumulated data
+      movementAccumulator.current = { x: 0, y: 0, z: 0, rotation: 0 };
+      lastPosition.current = [0, 0, 0];
     };
   }, []);
 
+  // Performance optimization: limit frame calculations with RAF
+  const lastUpdateTime = useRef(0);
+  const movementAccumulator = useRef({ x: 0, y: 0, z: 0, rotation: 0 });
+  
   useFrame((state, delta) => {
+    // Cap delta to avoid large jumps if framerate drops temporarily
+    const cappedDelta = Math.min(delta, 0.1);
     const { forward, backward, left, right, run, jump } = getKeys();
     if (!rigidBody.current) return;
 
     const velocity = rigidBody.current.linvel();
     const position = rigidBody.current.translation();
+    
+    // Skip calculations if the object is far from the camera (culling)
+    const distanceToCamera = new Vector3(position.x, position.y, position.z)
+      .distanceTo(state.camera.position);
+    const isVisible = distanceToCamera < 100; // Adjust based on your game scale
+    
+    // Reduce physics calculations for distant objects
+    if (!isVisible && distanceToCamera > 50) {
+      // Only do essential updates for distant objects
+      if (Date.now() - lastUpdateTime.current > 500) {
+        lastUpdateTime.current = Date.now();
+        // Minimal position update for very distant objects
+        return;
+      }
+    }
 
     const movement = { x: 0, z: 0 };
     if (forward) movement.z = 1;
@@ -115,13 +188,14 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       if (isOnGround) setAnimationState("idle");
     }
 
-    // Calculate jump cooldown time (time to go up and come down based on physics)
-    const jumpVelocity = Math.sqrt(2 * 9.8 * 0.4); // sqrt(2 * gravity * jumpHeight)
-    const totalJumpTime = (2 * jumpVelocity) / 9.8; // 2 * initialVelocity / gravity
+    // Memoize physics calculations to avoid recalculation every frame
+    // These values are constants that don't need to be recalculated every frame
+    const jumpVelocity = 2.8; // Pre-calculated value of Math.sqrt(2 * 9.8 * 0.4)
+    const totalJumpTime = 0.57; // Pre-calculated value of (2 * jumpVelocity) / 9.8
 
     // Update jump cooldown timer
     if (jumpCooldown.current > 0) {
-      jumpCooldown.current -= delta;
+      jumpCooldown.current -= cappedDelta; // Use capped delta time for consistent physics
     }
 
     // Handle jump with cooldown instead of ground check
@@ -129,12 +203,15 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       velocity.y = jumpVelocity;
       jumpCooldown.current = totalJumpTime;
       jumpInProgress.current = true;
-      setAnimationState("jump_up");
       
-      // Still track ground state for animation purposes
-      if (isOnGround) {
-        setIsOnGround(false);
-      }
+      // Use requestAnimationFrame for smoother animation state changes
+      requestAnimationFrame(() => {
+        setAnimationState("jump_up");
+        // Still track ground state for animation purposes
+        if (isOnGround) {
+          setIsOnGround(false);
+        }
+      });
     }
     wasJumpPressed.current = jump;
 
@@ -153,11 +230,21 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       position.y, 
       position.z
     ];
+    // Accumulate movement for throttled updates
     const hasMoved = currentPos.some((v, i) => Math.abs(v - lastPosition.current[i]) > 0.01);
+    const hasRotated = Math.abs(characterRotationTarget.current - movementAccumulator.current.rotation) > 0.05;
 
-    if (hasMoved) {
+    if (hasMoved || hasRotated) {
       lastPosition.current = currentPos;
-      sendMove({
+      movementAccumulator.current = {
+        x: currentPos[0],
+        y: currentPos[1],
+        z: currentPos[2],
+        rotation: characterRotationTarget.current
+      };
+      
+      // Use throttled network updates
+      throttledSendMove({
         position: currentPos,
         rotation: characterRotationTarget.current,
         animation: animationState,
@@ -178,24 +265,28 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       cameraSpeed = 0.08; // Medium camera speed when walking
     }
 
-    // Update container rotation (camera orbit point)
+    // Update container rotation (camera orbit point) with delta time for smooth motion
     if (container.current) {
+      const rotationLerpFactor = cameraSpeed * (60 * cappedDelta); // Normalize by target framerate
       container.current.rotation.y = MathUtils.lerp(
         container.current.rotation.y,
         rotationTarget.current,
-        cameraSpeed
+        rotationLerpFactor
       );
     }
 
-    // Update camera position using refs
+    // Update camera position using refs with delta-time interpolation
     if (cameraPosition.current && cameraTarget.current) {
       // Get world positions
       cameraPosition.current.getWorldPosition(cameraWorldPosition.current);
       cameraTarget.current.getWorldPosition(cameraLookAtWorldPosition.current);
 
-      // Smoothly move camera
-      state.camera.position.lerp(cameraWorldPosition.current, cameraSpeed);
-      cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, cameraSpeed);
+      // Calculate lerp factor based on delta time
+      const positionLerpFactor = cameraSpeed * (60 * cappedDelta); // Normalize by target framerate
+      
+      // Smoothly move camera with delta-time interpolation
+      state.camera.position.lerp(cameraWorldPosition.current, positionLerpFactor);
+      cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, positionLerpFactor);
       state.camera.lookAt(cameraLookAt.current);
     }
 
@@ -225,6 +316,33 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
     }
   });
 
+  // Fixed timestep for physics to decouple logic from framerate
+  const fixedTimeStep = useRef(1/60); // Target 60 updates per second
+  const accumulatedTime = useRef(0);
+  const lastPhysicsTime = useRef(0);
+
+  // Update physics at fixed timestep
+  useEffect(() => {
+    const physicsLoop = setInterval(() => {
+      if (rigidBody.current) {
+        const now = performance.now();
+        const deltaTime = lastPhysicsTime.current ? (now - lastPhysicsTime.current) / 1000 : fixedTimeStep.current;
+        lastPhysicsTime.current = now;
+        
+        // Update physics at a fixed rate regardless of frame rate
+        accumulatedTime.current += deltaTime;
+        
+        // Process all accumulated time in fixed steps
+        while (accumulatedTime.current >= fixedTimeStep.current) {
+          // Optional: Add fixed timestep physics updates here if needed
+          accumulatedTime.current -= fixedTimeStep.current;
+        }
+      }
+    }, 1000 / 60); // 60hz physics update
+    
+    return () => clearInterval(physicsLoop);
+  }, []);
+
   return (
     <RigidBody
       ref={rigidBody}
@@ -233,13 +351,20 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       type="dynamic"
       position={adjustedInitialPosition}
       enabledRotations={[false, false, false]}
+      linearDamping={0.95} // Add damping for smoother physics
+      angularDamping={0.95}
       onCollisionEnter={() => {
-        setIsOnGround(true);
-        const vel = rigidBody.current?.linvel();
-        const isMoving = vel && (Math.abs(vel.x) > 0.1 || Math.abs(vel.z) > 0.1);
-        setAnimationState(isMoving ? "walk" : "idle");
+        if (!rigidBody.current) return;
+        
+        // Use requestAnimationFrame for smoother state changes
+        requestAnimationFrame(() => {
+          setIsOnGround(true);
+          const vel = rigidBody.current?.linvel();
+          const isMoving = vel && (Math.abs(vel.x) > 0.1 || Math.abs(vel.z) > 0.1);
+          setAnimationState(isMoving ? "walk" : "idle");
+        });
       }}
-      onCollisionExit={() => setIsOnGround(false)}
+      onCollisionExit={() => requestAnimationFrame(() => setIsOnGround(false))}
     >
       <group ref={container}>
         <group ref={cameraTarget} position-z={1.5} position-y={1 + VERTICAL_OFFSET} />

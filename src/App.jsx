@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { KeyboardControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Experience } from "./components/Experience";
@@ -8,6 +8,7 @@ import EmojiOverlay from './components/EmojiOverlay';
 import { MultiplayerProvider } from './components/MultiplayerProvider';
 import EmojiButton from './components/EmojiButton';
 import { PlayerList } from './components/PlayerList';
+import { StatsMonitor } from './components/StatsMonitor';
 
 const keyboardMap = [
   { name: "forward", keys: ["ArrowUp", "KeyW"] },
@@ -44,6 +45,20 @@ function App() {
     setShowCreator(false);
   }
 
+  // Performance optimizations for Canvas
+  const canvasConfig = useMemo(() => ({
+    gl: {
+      powerPreference: "high-performance",
+      antialias: true,
+      stencil: false,
+      depth: true
+    },
+    dpr: Math.min(window.devicePixelRatio, 2), // Cap pixel ratio for better performance
+    flat: true, // Flat framebuffers are more efficient
+    frameloop: 'demand', // Only render when needed (saves CPU/GPU)
+    // performance: { min: 0.5 } // Drop quality if framerate drops below target
+  }), []);
+  
   return (
     <>
       <MultiplayerProvider characterColor={characterColor} position={[0, 2, 0]}>
@@ -54,6 +69,7 @@ function App() {
             style={{
               touchAction: "none",
             }}
+            {...canvasConfig}
           >
             <color attach="background" args={["#ececec"]} />
             <Experience characterColor={characterColor} />
@@ -68,6 +84,9 @@ function App() {
         <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 1000 }}>
           <PlayerList />
         </div>
+        
+        {/* Performance monitor - toggle in production */}
+        <StatsMonitor />
         {showCreator && (
           <CharacterCreator
             initialColor={characterColor}

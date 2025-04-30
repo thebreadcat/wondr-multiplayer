@@ -17,7 +17,7 @@ let hostId = null;
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  // Send all existing players to the new player
+  // Immediately send all existing players to the new player
   socket.emit('players', players);
 
   // Broadcast new player to everyone else AFTER full state sent
@@ -25,15 +25,24 @@ io.on('connection', (socket) => {
     const player = {
       id: socket.id,
       position: data.position || [0, 0, 0],
-      rotation: [0, 0, 0],
+      rotation: data.rotation || 0,
       color: data.color,
       emoji: null,
       emojiTimestamp: null,
-      animation: 'idle'
+      animation: data.animation || 'idle'
     };
     players[socket.id] = player;
 
-    socket.broadcast.emit('player-joined', player);
+    // Important: Broadcast to ALL clients including sender
+    // This ensures existing players know about new players
+    io.emit('player-joined', player);
+    
+    // Also broadcast the full player list after a small delay
+    // This helps ensure consistent state across all clients
+    setTimeout(() => {
+      io.emit('players', players);
+    }, 100); // Small delay to ensure client is ready
+    
     console.log(`Player joined: ${socket.id}`);
     console.log('Current players state:', players);
   });
@@ -84,16 +93,43 @@ io.on('connection', (socket) => {
     io.emit('player-emoji-removed', { id: socket.id });
   });
 
+  // Handle state refresh from existing players
+  socket.on('refresh-state', (playerState) => {
+    if (players[playerState.id]) {
+      // Update server's record of this player's state
+      players[playerState.id] = {
+        ...players[playerState.id],
+        ...playerState
+      };
+      
+      // No need to broadcast here as this is just keeping server state in sync
+      console.log(`Player state refreshed for ${playerState.id}`);
+    }
+  });
+
   // Handle full resync request
   socket.on('request-players', () => {
+    // Send current state to the requesting client
     socket.emit('players', players);
+    console.log(`Resync requested by ${socket.id}`);
   });
 
   // Handle disconnection
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
-    delete players[socket.id];
-    io.emit('player-left', socket.id);
+    
+    // Check if player exists before removal
+    if (players[socket.id]) {
+      delete players[socket.id];
+      
+      // Notify all clients that a player has left
+      io.emit('player-left', socket.id);
+      
+      // Send updated player list after player leaves
+      setTimeout(() => {
+        io.emit('players', players);
+      }, 100);
+    }
 
     if (socket.id === hostId) {
       const remaining = Object.keys(players);
