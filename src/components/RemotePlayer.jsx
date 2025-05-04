@@ -49,7 +49,7 @@ export default function RemotePlayer({ player }) {
     }
 
     // Debug log occasionally
-    if (Math.random() < 0.02) {
+    if (Math.random() < 0.02 && false) {
       console.log(`Player ${id} physics position:`, {
         position: [worldPosition.x, worldPosition.y, worldPosition.z],
         serverPosition: player.position,

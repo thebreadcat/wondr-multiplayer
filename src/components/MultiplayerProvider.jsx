@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import { Vector3 } from 'three';
+import { getSocket } from '../utils/socketManager';
 
 // Throttle function to limit network updates
 const throttle = (callback, limit) => {
@@ -132,11 +133,23 @@ export function MultiplayerProvider({ characterColor, position, children }) {
   }, []);
 
   useEffect(() => {
-    const socket = io('http://localhost:3006', { 
-      transports: ['websocket'],  // Force WebSocket for better performance
-      upgrade: false // Disable polling
-    });
+    // Create a direct socket connection similar to our test script
+    console.log('[MultiplayerProvider] Creating direct socket connection');
+    const socket = io('http://localhost:3006', { transports: ['polling'] });
+    
+    // Store references
     socketRef.current = socket;
+    window.gameSocket = socket;
+    window.socket = socket;
+    
+    // Log connection status
+    socket.on('connect', () => {
+      console.log('[MultiplayerProvider] Connected with ID:', socket.id);
+    });
+    
+    socket.on('connect_error', (err) => {
+      console.error('[MultiplayerProvider] Connection error:', err);
+    });
     
     // Setup periodic resync to ensure all clients stay in sync
     const syncInterval = setInterval(() => {

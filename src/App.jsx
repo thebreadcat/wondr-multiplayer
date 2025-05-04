@@ -6,9 +6,11 @@ import CustomizeButton from './components/CustomizeButton';
 import CharacterCreator from './components/CharacterCreator';
 import EmojiOverlay from './components/EmojiOverlay';
 import { MultiplayerProvider } from './components/MultiplayerProvider';
+import { GameSystemProvider } from './components/GameSystemProvider';
 import EmojiButton from './components/EmojiButton';
 import { PlayerList } from './components/PlayerList';
 import { StatsMonitor } from './components/StatsMonitor';
+import { GameTimerDemo } from './components/GameTimer';
 
 const keyboardMap = [
   { name: "forward", keys: ["ArrowUp", "KeyW"] },
@@ -19,7 +21,6 @@ const keyboardMap = [
   { name: "jump", keys: ["Space"] },
 ];
 
-// Import color options from CharacterCreator
 const COLORS = [
   '#FF0000', '#FF7F00', '#FFFF00', '#7FFF00',
   '#00FF00', '#00FF7F', '#00FFFF', '#007FFF',
@@ -28,33 +29,27 @@ const COLORS = [
 ];
 
 function App() {
-  // Cookie helpers
   function getCookie(name) {
     const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
     return match ? decodeURIComponent(match[2]) : null;
   }
-  
+
   function setCookie(name, value) {
-    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=31536000`; // 1 year expiry
+    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=31536000`;
   }
 
-  // Get a random color from available options
   function getRandomColor() {
     return COLORS[Math.floor(Math.random() * COLORS.length)];
   }
 
   const [showCreator, setShowCreator] = useState(false);
-  const [characterColor, setCharacterColor] = useState(getRandomColor()); // Default to random
+  const [characterColor, setCharacterColor] = useState(getRandomColor());
 
-  // On mount, read color from cookie or assign random color
   useEffect(() => {
     const cookieColor = getCookie('characterColor');
-    
     if (cookieColor) {
-      // Use saved color preference
       setCharacterColor(cookieColor);
     } else {
-      // Assign and save random color for new users
       const randomColor = getRandomColor();
       setCharacterColor(randomColor);
       setCookie('characterColor', randomColor);
@@ -71,7 +66,6 @@ function App() {
     setShowCreator(false);
   }
 
-  // Performance optimizations for Canvas
   const canvasConfig = useMemo(() => ({
     gl: {
       powerPreference: "high-performance",
@@ -79,28 +73,26 @@ function App() {
       stencil: false,
       depth: true
     },
-    dpr: Math.min(window.devicePixelRatio, 2), // Cap pixel ratio for better performance
-    flat: true, // Flat framebuffers are more efficient
-    frameloop: 'demand', // Only render when needed (saves CPU/GPU)
-    // performance: { min: 0.5 } // Drop quality if framerate drops below target
+    dpr: Math.min(window.devicePixelRatio, 2),
+    flat: true,
+    frameloop: 'demand',
   }), []);
-  
+
   return (
-    <>
-      <MultiplayerProvider characterColor={characterColor} position={[0, 2, 0]}>
+    <MultiplayerProvider characterColor={characterColor} position={[0, 2, 0]}>
+      <GameSystemProvider>
         <KeyboardControls map={keyboardMap}>
           <Canvas
             shadows
             camera={{ position: [3, 3, 3], near: 0.1, fov: 40 }}
-            style={{
-              touchAction: "none",
-            }}
+            style={{ touchAction: "none" }}
             {...canvasConfig}
           >
             <color attach="background" args={["#ececec"]} />
             <Experience characterColor={characterColor} />
           </Canvas>
         </KeyboardControls>
+        <GameTimerDemo />
         <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
           <CustomizeButton onClick={() => setShowCreator(true)} />
         </div>
@@ -110,8 +102,6 @@ function App() {
         <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 1000 }}>
           <PlayerList />
         </div>
-        
-        {/* Performance monitor - toggle in production */}
         <StatsMonitor />
         {showCreator && (
           <CharacterCreator
@@ -120,8 +110,8 @@ function App() {
             onCancel={handleCancel}
           />
         )}
-      </MultiplayerProvider>
-    </>
+      </GameSystemProvider>
+    </MultiplayerProvider>
   );
 }
 

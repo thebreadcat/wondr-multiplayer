@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import { Environment, OrthographicCamera, Html } from "@react-three/drei";
 import { Physics } from "@react-three/rapier";
 import { CharacterController } from "./CharacterController";
 import { Map } from "./Map";
-import { MultiplayerProvider, useMultiplayer } from "./MultiplayerProvider";
-import { Character } from "./Character";
+import { useMultiplayer } from "./MultiplayerProvider";
+import { getSocket } from "../utils/socketManager";
+import GameElements3D from "./games/GameElements3D";
 import RemotePlayer from "./RemotePlayer";
-import { PlayerList } from './PlayerList';
+import { GameSystemContext } from "./GameSystemProvider";
+import { TagGameController } from "../games/tag/TagGameController";
+import { TagGameUI } from "../games/tag/TagGameUI";
+import { SpawnPositionHandler } from "../games/tag/SpawnPositionHandler";
 
 const maps = {
   castle_on_hills: {
@@ -49,12 +53,47 @@ function RemotePlayersPool() {
 }
 
 export const Experience = ({ characterColor }) => {
-  const { sendEmoji } = useMultiplayer();
+  const { sendEmoji, myId, players } = useMultiplayer();
+  const { activeGames } = useContext(GameSystemContext);
   const shadowCameraRef = useRef();
   const map = "animal_crossing_map";
   const [localPosition, setLocalPosition] = useState(defaultPosition);
   const [idle, setIdle] = useState(false);
   const lastActiveTimeRef = useRef(Date.now());
+  
+  // Find active tag game if any exists - look for games that start with 'tag'
+  // Make sure game is an object with properties, not just a string
+  const activeTagGame = Object.entries(activeGames || {}).find(([roomId, game]) => {
+    // Check if game is a valid object with required properties
+    if (!game || typeof game !== 'object' || !game.gameType) {
+      console.log(`\n⚠️ Invalid game format for key ${roomId}:`, game);
+      return false;
+    }
+    
+    // Check if this is a tag game that's currently playing
+    return (game.gameType === 'tag' || roomId.startsWith('tag')) && 
+           game.state === 'playing';
+  });
+  
+  // Debug active tag game detection
+  useEffect(() => {
+    console.log('\n====== GAME STATE DEBUG ======');
+    console.log('🎮 ACTIVE GAMES:', Object.keys(activeGames || {}));
+    console.log('🎮 ACTIVE GAMES FULL:', activeGames);
+    console.log('🎯 ACTIVE TAG GAME:', activeTagGame ? 
+      `${activeTagGame[0]} (Tagged: ${activeTagGame[1].taggedPlayerId?.substring(0, 6)})` : 'none');
+    
+    if (activeTagGame) {
+      console.log('🎮 GAME DETAILS:', {
+        roomId: activeTagGame[0],
+        gameType: activeTagGame[1].gameType,
+        state: activeTagGame[1].state,
+        taggedPlayerId: activeTagGame[1].taggedPlayerId?.substring(0, 6),
+        isCurrentPlayerTagged: activeTagGame[1].taggedPlayerId === myId,
+        playerCount: activeTagGame[1].players?.length || 0
+      });
+    }
+  }, [activeGames, activeTagGame, myId]);
 
   // Reset idle timer whenever position changes
   useEffect(() => {
@@ -124,19 +163,75 @@ export const Experience = ({ characterColor }) => {
       </directionalLight>
       {!idle && (
         <Physics>
-          <Map
-            scale={maps[map].scale}
-            position={maps[map].position}
-            model={`models/${map}.glb`}
-          />
-          {/* Always render local player with CharacterController */}
-          <CharacterController
-            initialPosition={localPosition}
-            characterColor={characterColor}
-            setLocalPosition={setLocalPosition}
-          />
-          {/* Render all remote players from the pool */}
-          <RemotePlayersPool />
+          {activeTagGame ? (
+            <>
+              {/* Add tag game controller if there's an active tag game */}
+              <TagGameController
+                gameType="tag"
+                roomId={activeTagGame[0]}
+              />
+              
+              {/* Map and players */}
+              <Map
+                scale={maps[map].scale}
+                position={maps[map].position}
+                model={`models/${map}.glb`}
+              />
+              
+              {/* Always render local player with CharacterController */}
+              <CharacterController
+                initialPosition={localPosition}
+                characterColor={characterColor}
+                setLocalPosition={setLocalPosition}
+              />
+              
+              {/* Handle spawn position teleportation when tag game starts */}
+              <SpawnPositionHandler
+                setLocalPosition={setLocalPosition}
+              />
+              
+              {/* Render all remote players from the pool */}
+              <RemotePlayersPool />
+              
+              {/* Render 3D game elements (join zones, etc.) */}
+              <GameElements3D />
+              
+              {/* Tag game UI overlay */}
+              <Html fullscreen>
+                <TagGameUI 
+                  gameType="tag"
+                  roomId={activeTagGame[0]}
+                  players={players}
+                  myId={myId}
+                />
+              </Html>
+            </>
+          ) : (
+            <>
+              <Map
+                scale={maps[map].scale}
+                position={maps[map].position}
+                model={`models/${map}.glb`}
+              />
+              {/* Always render local player with CharacterController */}
+              <CharacterController
+                initialPosition={localPosition}
+                characterColor={characterColor}
+                setLocalPosition={setLocalPosition}
+              />
+              
+              {/* Handle spawn position teleportation when tag game starts */}
+              <SpawnPositionHandler
+                setLocalPosition={setLocalPosition}
+              />
+              
+              {/* Render all remote players from the pool */}
+              <RemotePlayersPool />
+              
+              {/* Render 3D game elements (join zones, etc.) */}
+              <GameElements3D />
+            </>
+          )}
         </Physics>
       )}
       {idle && (
