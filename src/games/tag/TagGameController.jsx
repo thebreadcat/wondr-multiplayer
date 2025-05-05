@@ -17,7 +17,7 @@ const useSocket = () => {
 // Tag detection distance (how close players need to be to tag)
 const TAG_DISTANCE = 0.25;
 
-// Direct collision detection - will bypass all the socket/tag status logicd
+// Direct collision detection - will bypass all the socket/tag sstatus logicd
 const DIRECT_COLLISION_ENABLED = true;
 const FORCE_COLLISION_TESTING = true; // Will test collisions regardless of tag status
 

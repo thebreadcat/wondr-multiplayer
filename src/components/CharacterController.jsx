@@ -1,12 +1,14 @@
 // CharacterController.jsx (refactored with stable animation, jump handling, clean updates)
-import React, { useRef, useState, useEffect, useMemo } from "react";
-import { useKeyboardControls, Html } from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
-import { CapsuleCollider, RigidBody } from "@react-three/rapier";
-import { MathUtils, Vector3 } from "three";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
+import { Vector3, Euler, MathUtils } from "three";
+import { CapsuleCollider, RigidBody, useRapier } from "@react-three/rapier";
 import { Character } from "./Character";
+import { Html, useKeyboardControls } from "@react-three/drei";
 import { useMultiplayer } from "./MultiplayerProvider";
-import styles from './RemotePlayer.module.css';
+import { useGameSystem } from "./GameSystemProvider";
+import styles from "./RemotePlayer.module.css";
+import TagPlayerIndicator from "../games/tag/TagPlayerIndicator";
 
 // Throttle function to limit how often a function gets called
 const throttle = (callback, delay) => {
@@ -63,7 +65,7 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
   const character = useRef();
   const container = useRef();
   const [, getKeys] = useKeyboardControls();
-  const { sendMove, sendEmoji, emoji, myId } = useMultiplayer();
+  const { sendMove, sendEmoji, emoji, myId, emojis } = useMultiplayer();
   
   // Create throttled sendMove function to limit network traffic
   const throttledSendMove = useMemo(
@@ -376,6 +378,9 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
               <div className={styles.emojiContainer}>{emoji}</div>
             </Html>
           )}
+          
+          {/* Tag game indicator for local player */}
+          <TagPlayerIndicator playerId={myId} />
         </group>
       </group>
       <CapsuleCollider args={[0.3, 0.3]} position={[0, 0.8 + VERTICAL_OFFSET, 0]} />

@@ -11,6 +11,7 @@ import EmojiButton from './components/EmojiButton';
 import { PlayerList } from './components/PlayerList';
 import { StatsMonitor } from './components/StatsMonitor';
 import { GameTimerDemo } from './components/GameTimer';
+import TagGameOverlay from './games/tag/TagGameOverlay';
 
 const keyboardMap = [
   { name: "forward", keys: ["ArrowUp", "KeyW"] },
@@ -92,7 +93,8 @@ function App() {
             <Experience characterColor={characterColor} />
           </Canvas>
         </KeyboardControls>
-        <GameTimerDemo />
+        {/* Game overlay UI - this appears outside the canvas as a true HTML overlay */}
+        <TagGameOverlay />
         <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
           <CustomizeButton onClick={() => setShowCreator(true)} />
         </div>

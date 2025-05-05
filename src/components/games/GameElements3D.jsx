@@ -87,9 +87,15 @@ function GameElements3D() {
       if (!joinZone) return;
       
       // Check if a game of this type is already active
-      const isGameActive = activeGames && activeGames[`${gameType}-1`];
+      // Look through all active games to find any with matching gameType and active state
+      const activeGameOfType = Object.entries(activeGames || {}).find(([roomId, game]) => {
+        return game?.gameType === gameType && game?.state === 'playing';
+      });
+      
+      const isGameActive = !!activeGameOfType;
+      
       if (isGameActive) {
-        console.log(`[GameElements3D] Game ${gameType} is active, disabling join zone`);
+        console.log(`[GameElements3D] Game ${gameType} is active (${activeGameOfType[0]}), disabling join zone`);
         return; // Skip zone detection when game is active
       }
 
@@ -129,14 +135,20 @@ function GameElements3D() {
       const joinZone = game.config.joinZone;
       if (!joinZone) return null;
       
-      // Check if a game of this type is already active
-      const isGameActive = activeGames && activeGames[`${gameType}-1`];
+      // Check if a game of this type is already active - use the same logic as useFrame
+      const activeGameOfType = Object.entries(activeGames || {}).find(([roomId, game]) => {
+        return game?.gameType === gameType && game?.state === 'playing';
+      });
+      
+      const isGameActive = !!activeGameOfType;
       const position = joinZone.center || [0, 0, 0];
       const scale = [joinZone.radius * 2 || 2, 0.2, joinZone.radius * 2 || 2];
       
       // Change color based on game state
       const zoneColor = isGameActive ? '#888888' : '#00FF00';
       const zoneOpacity = isGameActive ? 0.15 : 0.3;
+      
+      console.log(`[GameElements3D] Rendering join zone for ${gameType}, active: ${isGameActive}`);
 
       return (
         <group key={gameType}>
@@ -150,7 +162,7 @@ function GameElements3D() {
             color={isGameActive ? "#888" : "#000"}
             anchorX="center"
             anchorY="middle">
-            {game.name || gameType} {isGameActive ? "(Game in progress)" : ""}
+            {game.name || gameType} {isGameActive ? "(Game in progress)" : "(Join here!)"}
           </Text>
           {showCountdown[gameType] && (
             <Text

@@ -3,9 +3,11 @@ import { useFrame } from '@react-three/fiber';
 import { Character } from './Character';
 import { Html } from '@react-three/drei';
 import { useMultiplayer } from './MultiplayerProvider';
+import { useGameSystem } from './GameSystemProvider';
 import { Vector3, MathUtils } from 'three';
 import styles from './RemotePlayer.module.css';
 import { RigidBody } from '@react-three/rapier';
+import TagPlayerIndicator from '../games/tag/TagPlayerIndicator';
 
 export default function RemotePlayer({ player }) {
   const { color, rotation = 0, animation = 'idle', id } = player;
@@ -80,6 +82,7 @@ export default function RemotePlayer({ player }) {
       <group rotation-y={rotation}>
         <Character color={color} animation={animation} />
       </group>
+      {/* Player emoji */}
       {emojis[id]?.value && (
         <Html
           position={[0, 1, 0]}
@@ -91,6 +94,9 @@ export default function RemotePlayer({ player }) {
           </div>
         </Html>
       )}
+      
+      {/* Tag game indicator - red for IT, blue for players */}
+      <TagPlayerIndicator playerId={id} />
     </RigidBody>
   );
 } 

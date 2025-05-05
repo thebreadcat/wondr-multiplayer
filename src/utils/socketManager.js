@@ -9,8 +9,23 @@ export function getSocket() {
   if (!socket) {
     console.log('[SocketManager] Creating new socket connection');
     
-    // Create a basic socket connection with minimal options
-    socket = io('http://localhost:3006');
+    // Enhanced socket connection with robust options to address CORS and reliability issues
+    socket = io('http://localhost:3006', {
+      // Matching the server-side transport configuration
+      transports: ['websocket', 'polling'],
+      // Disable automatic reconnection to control the flow better
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      // Credentials handling to avoid CORS issues
+      withCredentials: false,
+      // Explicitly set origin to match CORS configuration on server
+      extraHeaders: {
+        'Origin': window.location.origin
+      }
+    });
     
     // Make socket available globally for legacy code
     window.gameSocket = socket;

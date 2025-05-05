@@ -8,9 +8,7 @@ import { getSocket } from "../utils/socketManager";
 import GameElements3D from "./games/GameElements3D";
 import RemotePlayer from "./RemotePlayer";
 import { GameSystemContext } from "./GameSystemProvider";
-import { TagGameController } from "../games/tag/TagGameController";
-import { TagGameUI } from "../games/tag/TagGameUI";
-import { SpawnPositionHandler } from "../games/tag/SpawnPositionHandler";
+import TagGameRefactored from "../games/tag/TagGameRefactored";
 
 const maps = {
   castle_on_hills: {
@@ -163,12 +161,14 @@ export const Experience = ({ characterColor }) => {
       </directionalLight>
       {!idle && (
         <Physics>
-          {activeTagGame ? (
+          {/* CRITICAL FIX: Only show tag game if player is actually in it */}
+          {activeTagGame && activeTagGame[1]?.players?.includes(myId) ? (
             <>
-              {/* Add tag game controller if there's an active tag game */}
-              <TagGameController
+              {/* TagGame component with position control - only for players in the game */}
+              <TagGameRefactored 
                 gameType="tag"
                 roomId={activeTagGame[0]}
+                setLocalPosition={setLocalPosition}
               />
               
               {/* Map and players */}
@@ -185,26 +185,11 @@ export const Experience = ({ characterColor }) => {
                 setLocalPosition={setLocalPosition}
               />
               
-              {/* Handle spawn position teleportation when tag game starts */}
-              <SpawnPositionHandler
-                setLocalPosition={setLocalPosition}
-              />
-              
               {/* Render all remote players from the pool */}
               <RemotePlayersPool />
               
               {/* Render 3D game elements (join zones, etc.) */}
               <GameElements3D />
-              
-              {/* Tag game UI overlay */}
-              <Html fullscreen>
-                <TagGameUI 
-                  gameType="tag"
-                  roomId={activeTagGame[0]}
-                  players={players}
-                  myId={myId}
-                />
-              </Html>
             </>
           ) : (
             <>
@@ -220,10 +205,10 @@ export const Experience = ({ characterColor }) => {
                 setLocalPosition={setLocalPosition}
               />
               
-              {/* Handle spawn position teleportation when tag game starts */}
-              <SpawnPositionHandler
+              {/* Spawn position handling is now integrated into TagGameRefactored */}
+              {/* <SpawnPositionHandler
                 setLocalPosition={setLocalPosition}
-              />
+              /> */}
               
               {/* Render all remote players from the pool */}
               <RemotePlayersPool />
