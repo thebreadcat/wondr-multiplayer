@@ -23,6 +23,7 @@ const GameZoneSystem = ({
   onPlayerExitedZone,
   enableAutoEmit = true,
   zoneColor = 'rgba(0, 255, 0, 0.2)',
+  isGameActive = false,
   children,
 }) => {
   const { myId, players } = useMultiplayer();
@@ -31,6 +32,9 @@ const GameZoneSystem = ({
 
   // State to track if player is in zone
   const [isInZone, setIsInZone] = useState(false);
+  // State to track join rejection
+  const [joinRejected, setJoinRejected] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
   
   // Default cylinder height
   const cylinderHeight = 10;
@@ -48,6 +52,38 @@ const GameZoneSystem = ({
       zoneExitCountersRef.current[gameType] = {};
     }
   }, [gameType]);
+  
+  // Listen for join rejection messages from server
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleGameJoinRejected = (data) => {
+      if (data.gameType !== gameType) return;
+      
+      console.log(`[GameZoneSystem] Join rejected: ${data.message}`);
+      setJoinRejected(true);
+      setRejectionReason(data.message);
+      
+      // Reset after a short delay
+      setTimeout(() => {
+        setJoinRejected(false);
+        setRejectionReason('');
+      }, 3000);
+      
+      // Force player out of the zone state
+      if (isInZone) {
+        setIsInZone(false);
+        zoneEntryCountersRef.current[gameType][myId] = 0;
+        zoneExitCountersRef.current[gameType][myId] = stabilizationThreshold;
+      }
+    };
+    
+    socket.on('gameJoinRejected', handleGameJoinRejected);
+    
+    return () => {
+      socket.off('gameJoinRejected', handleGameJoinRejected);
+    };
+  }, [socket, gameType, isInZone, myId, stabilizationThreshold]);
 
   // Zone detection with position stabilization
   useEffect(() => {
@@ -106,7 +142,9 @@ const GameZoneSystem = ({
         
         // Emit zone exit event if enabled
         if (enableAutoEmit && socket) {
-          socket.emit('playerExitedZone', { gameType, playerId: myId });
+          const roomId = `${gameType}-1`; // Use a default room ID format
+          console.log(`[GameZoneSystem] Player exited zone - emitting playerExitedZone for ${gameType} with roomId ${roomId}`);
+          socket.emit('playerExitedZone', { gameType, playerId: myId, roomId });
         }
         
         // Call callback if provided
@@ -131,10 +169,15 @@ const GameZoneSystem = ({
       {showVisualDebug && (
         <Cylinder 
           position={zonePosition} 
-          args={[zoneRadius, zoneRadius, cylinderHeight, 32]} 
-          rotation={[Math.PI / 2, 0, 0]}
+          args={[zoneRadius/3, zoneRadius/3, cylinderHeight, 32]} 
+          rotation={[0, 0, 0]}
         >
-          <meshBasicMaterial color={zoneColor} transparent opacity={0.3} />
+          <meshBasicMaterial 
+            color={isGameActive ? '#CCCCCC' : zoneColor} 
+            transparent 
+            opacity={isGameActive ? 0.08 : 0.3} 
+            depthWrite={false}
+          />
         </Cylinder>
       )}
       {children ? children({ isInZone }) : null}

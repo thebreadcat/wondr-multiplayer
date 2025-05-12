@@ -3,6 +3,7 @@
  * Refactored version of the tag game using modular game system components
  */
 import React, { useState, useEffect, useRef } from 'react';
+import { Text } from '@react-three/drei';
 import { useMultiplayer } from '../../components/MultiplayerProvider';
 import { useGameSystem } from '../../components/GameSystemProvider';
 import { getSocket } from '../../utils/socketManager';
@@ -30,6 +31,10 @@ const TagGameRefactored = ({ setLocalPosition }) => {
   const [taggedPlayerId, setTaggedPlayerId] = useState(null);
   const gameStartTimeRef = useRef(null);
   const cleanupPerformedRef = useRef(false);
+  
+  // Countdown state
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [countdownText, setCountdownText] = useState('');
   
   // Determine game status
   const gameType = 'tag';
@@ -124,6 +129,41 @@ const TagGameRefactored = ({ setLocalPosition }) => {
     }
   }, [isGameActive]);
   
+  // Listen for gameJoinCountdown events
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleGameJoinCountdown = (data) => {
+      if (data.gameType !== gameType) return;
+      
+      if (data.action === 'cancelled') {
+        console.log(`🚫 [TagGame] Join countdown cancelled for ${gameType}`);
+        setShowCountdown(false);
+      } else {
+        console.log(`⏱️ [TagGame] Join countdown started for ${gameType}: ${data.duration/1000}s`);
+        const duration = Math.floor((data.duration || 5000) / 1000);
+        setShowCountdown(true);
+        setCountdownText(`${duration}`);
+        
+        let remaining = duration;
+        const interval = setInterval(() => {
+          remaining--;
+          if (remaining <= 0) {
+            clearInterval(interval);
+            setShowCountdown(false);
+          }
+          setCountdownText(`${remaining}`);
+        }, 1000);
+      }
+    };
+    
+    socket.on('gameJoinCountdown', handleGameJoinCountdown);
+    
+    return () => {
+      socket.off('gameJoinCountdown', handleGameJoinCountdown);
+    };
+  }, [socket, gameType]);
+  
   // Actively query game status on first connection for immediate state sync
   useEffect(() => {
     if (!socket || !isGameActive || !roomId) return;
@@ -197,14 +237,43 @@ const TagGameRefactored = ({ setLocalPosition }) => {
       performCompleteCleanup('Explicit gameEnded event received');
     };
     
+    // Handle penalty tags (when players jump off the map)
+    const handlePlayerPenaltyTagged = (data) => {
+      console.log(`⚠️ [TagGame] Player penalty tag event received:`, data);
+      
+      if (!data) {
+        console.error(`❌ [TagGame] Invalid playerPenaltyTagged event - no data received`);
+        return;
+      }
+      
+      // Reset cleanup status whenever we get a valid tag event
+      cleanupPerformedRef.current = false;
+      
+      // Display specific messaging based on who got the penalty
+      if (data.playerId === myId) {
+        console.log(`😱 [TagGame] I received a penalty and am now IT!`);
+        setIsTagged(true);
+      } else {
+        console.log(`👀 [TagGame] Player ${data.playerId.substring(0, 6)} got a penalty and is now IT!`);
+        setIsTagged(false);
+      }
+      
+      // Update the tagged player ID
+      if (data.playerId) {
+        setTaggedPlayerId(data.playerId);
+      }
+    };
+    
     // Register event listeners on socket
     socket.on('playerTagged', handlePlayerTagged);
+    socket.on('playerPenaltyTagged', handlePlayerPenaltyTagged);
     socket.on('gameStateUpdate', handleGameStateUpdate);
     socket.on('gameEnded', handleGameEnded);
     
     // Register the same listeners on window.gameSocket if it exists and is different
     if (window.gameSocket && window.gameSocket !== socket) {
       window.gameSocket.on('playerTagged', handlePlayerTagged);
+      window.gameSocket.on('playerPenaltyTagged', handlePlayerPenaltyTagged);
       window.gameSocket.on('gameStateUpdate', handleGameStateUpdate);
       window.gameSocket.on('gameEnded', handleGameEnded);
     }
@@ -287,11 +356,78 @@ const TagGameRefactored = ({ setLocalPosition }) => {
       <GameZoneSystem
         gameType={gameType}
         zonePosition={JOIN_ZONE_POSITION}
-        zoneRadius={5}
+        zoneRadius={1.67}
         stabilizationThreshold={3} 
         showVisualDebug={true}
         zoneColor="rgba(0, 255, 0, 0.2)"
-      />
+        isGameActive={isGameActive}
+      >
+        {({ isInZone }) => (
+          <>
+            {/* Game name text */}
+            <Text
+              position={[JOIN_ZONE_POSITION[0], JOIN_ZONE_POSITION[1] + 11.5, JOIN_ZONE_POSITION[2]]}
+              fontSize={1.0}
+              color={isGameActive ? "#888888" : "#000000"}
+              anchorX="center"
+              anchorY="middle"
+              billboard
+              renderOrder={10}
+              depthTest={false}
+            >
+              Classic Tag {isGameActive ? "(IN PROGRESS)" : ""}
+            </Text>
+            
+            {/* Join here text - only when not active */}
+            {!isGameActive && (
+              <Text
+                position={[JOIN_ZONE_POSITION[0], JOIN_ZONE_POSITION[1] + 10.5, JOIN_ZONE_POSITION[2]]}
+                fontSize={0.8}
+                color="#00AA00"
+                anchorX="center"
+                anchorY="middle"
+                billboard
+                renderOrder={10}
+                depthTest={false}
+              >
+                JOIN HERE!
+              </Text>
+            )}
+            
+            {/* Minimum players text - only when not active */}
+            {!isGameActive && (
+              <Text
+                position={[JOIN_ZONE_POSITION[0], JOIN_ZONE_POSITION[1] + 9.5, JOIN_ZONE_POSITION[2]]}
+                fontSize={0.6}
+                color="#444444"
+                anchorX="center"
+                anchorY="middle"
+                billboard
+                renderOrder={10}
+                depthTest={false}
+              >
+                Requires 2 players minimum
+              </Text>
+            )}
+            
+            {/* Countdown text - only shows during countdown */}
+            {showCountdown && (
+              <Text
+                position={[JOIN_ZONE_POSITION[0], JOIN_ZONE_POSITION[1] + 13, JOIN_ZONE_POSITION[2]]}
+                fontSize={1.5}
+                color="#FFFFFF"
+                anchorX="center"
+                anchorY="middle"
+                billboard
+                renderOrder={10}
+                depthTest={false}
+              >
+                {countdownText}
+              </Text>
+            )}
+          </>
+        )}
+      </GameZoneSystem>
       
       {/* UI is now handled by the TagGameOverlay component in App.jsx */}
       

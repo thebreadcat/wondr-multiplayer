@@ -66,6 +66,7 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
   const container = useRef();
   const [, getKeys] = useKeyboardControls();
   const { sendMove, sendEmoji, emoji, myId, emojis } = useMultiplayer();
+  const { activeGames } = useGameSystem();
   
   // Create throttled sendMove function to limit network traffic
   const throttledSendMove = useMemo(
@@ -298,6 +299,28 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
 
     // Check if fallen too far
     if (worldPosition.y < -25) {
+      // Check if player is in an active tag game
+      const tagRoomId = Object.keys(activeGames || {}).find(
+        key => activeGames[key]?.gameType === 'tag' && activeGames[key]?.state === 'playing'
+      );
+      
+      // Check if player is in the game but not currently 'it'
+      const isInTagGame = tagRoomId && activeGames[tagRoomId]?.players?.includes(myId);
+      const isCurrentlyIt = tagRoomId && activeGames[tagRoomId]?.taggedPlayer === myId;
+      
+      // If player is in a tag game but not 'it', make them 'it' when they jump off
+      if (isInTagGame && !isCurrentlyIt) {
+        console.log(`[CharacterController] Player ${myId} jumped off map during Tag game - making them IT`);
+        if (window.gameSocket) {
+          window.gameSocket.emit('penaltyTag', {
+            gameType: 'tag',
+            roomId: tagRoomId,
+            playerId: myId,
+            reason: 'jumped_off_map'
+          });
+        }
+      }
+      
       // Respawn at initial position with offset
       rigidBody.current.setTranslation({ 
         x: adjustedInitialPosition[0], 

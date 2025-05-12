@@ -368,14 +368,12 @@ const TagGameController = () => {
               // Add direct alert for debugging if no event was sent
               if (!tagEventSent) {
                 console.error(`⚠️ [TagGame] No socket available for tagging! This is a critical error.`);
-                alert(`Debug: No socket available for tag event. Check console.`);
               }
               
               // Reset counter after tag attempt
               tagProximityCounters.current[playerId] = 0;
             } catch (err) {
               console.error('[TagGame] Error emitting tag event:', err);
-              alert(`Debug: Error sending tag event: ${err.message}`);
             }
           }
         } else {
@@ -711,7 +709,6 @@ const TagGameController = () => {
         
         if (!targetPlayerId) {
           console.log(`⚠️ [TagGame] No other players found for test tag`);
-          alert('No other players to tag');
           return;
         }
         
@@ -723,7 +720,6 @@ const TagGameController = () => {
         };
         
         console.log(`🧪 [TagGame] TEST TAG EVENT:`, testPayload);
-        alert(`Sending test tag: ${myId.substring(0, 5)} tagging ${targetPlayerId.substring(0, 5)}`);
         
         // Try all available socket methods
         if (window.gameSocket) window.gameSocket.emit('tagPlayer', testPayload);

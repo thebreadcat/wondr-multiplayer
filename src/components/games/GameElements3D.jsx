@@ -31,6 +31,7 @@ function GameElements3D() {
     console.log('[GameElements3D] Using global socket with ID:', socket.id);
 
     socket.on('gameJoinCountdown', (data) => {
+      console.log('gameJoinCountdown', data);
       if (data.action === 'cancelled') {
         setShowCountdown(prev => ({ ...prev, [data.gameType]: false }));
       } else {
@@ -144,9 +145,9 @@ function GameElements3D() {
       const position = joinZone.center || [0, 0, 0];
       const scale = [joinZone.radius * 2 || 2, 0.2, joinZone.radius * 2 || 2];
       
-      // Change color based on game state
-      const zoneColor = isGameActive ? '#888888' : '#00FF00';
-      const zoneOpacity = isGameActive ? 0.15 : 0.3;
+      // Change color and opacity based on game state
+      const zoneColor = isGameActive ? '#CCCCCC' : '#00FF00';
+      const zoneOpacity = isGameActive ? 0.08 : 0.3; // Much more transparent when disabled
       
       console.log(`[GameElements3D] Rendering join zone for ${gameType}, active: ${isGameActive}`);
 
@@ -154,27 +155,82 @@ function GameElements3D() {
       const cylinderHeight = 10;
       const cylinderRadius = joinZone.radius || 1; // Use exact radius from config
       
+      // Get minimum player requirement
+      const minPlayers = game.config?.minPlayers || 2;
+      
       return (
         <group key={gameType}>
-          <mesh position={[position[0], position[1] + (cylinderHeight/2), position[2]]}>
+          {/* Cylinder with material settings that let text show through */}
+          <mesh position={[position[0], position[1] + (cylinderHeight/2), position[2]]} renderOrder={1}>
             <cylinderGeometry args={[cylinderRadius, cylinderRadius, cylinderHeight, 32]} />
-            <meshStandardMaterial color={zoneColor} transparent opacity={zoneOpacity} />
+            <meshBasicMaterial 
+              color={zoneColor} 
+              transparent 
+              opacity={zoneOpacity} 
+              depthWrite={false} 
+              alphaTest={0.1}
+            />
           </mesh>
+          {/* Game name text */}
           <Text
-            position={[position[0], position[1] + cylinderHeight + 0.5, position[2]]}
-            fontSize={0.5}
-            color={isGameActive ? "#888" : "#000"}
+            position={[position[0], position[1] + 1.7, position[2]]}
+            fontSize={isGameActive ? 0.5 : 0.6}
+            color={isGameActive ? "#888888" : "#333333"}
             anchorX="center"
-            anchorY="middle">
-            {game.name || gameType} {isGameActive ? "(Game in progress)" : "(Join here!)"}
+            anchorY="middle"
+            billboard
+            renderOrder={20}
+            depthTest={false}
+            material-depthWrite={false}
+          >
+            {game.name || gameType}
           </Text>
+          
+          {/* Join here text - only when not active */}
+          {!isGameActive && (
+            <Text
+              position={[position[0], position[1] + 1, position[2]]}
+              fontSize={isGameActive ? 0.4 : 0.6}
+              color="#444444"
+              anchorX="center"
+              anchorY="middle"
+              billboard
+              renderOrder={20}
+              depthTest={false}
+              material-depthWrite={false}
+            >
+              {isGameActive ? "IN PROGRESS" : "JOIN HERE!"}
+            </Text>
+          )}
+          
+          {/* Minimum players text - only when not active */}
+          {!isGameActive && (
+            <Text
+              position={[position[0], position[1] + 0.5, position[2]]}
+              fontSize={0.25}
+              color="#444444"
+              anchorX="center"
+              anchorY="middle"
+              billboard
+              renderOrder={20}
+              depthTest={false}
+              material-depthWrite={false}
+            >
+              Requires {minPlayers} players minimum
+            </Text>
+          )}
           {showCountdown[gameType] && (
             <Text
-              position={[position[0], position[1] + 2, position[2]]}
-              fontSize={1}
-              color="#FFF"
+              position={[position[0], position[1] + 3, position[2]]}
+              fontSize={1.5}
+              color="#FFFFFF"
               anchorX="center"
-              anchorY="middle">
+              anchorY="middle"
+              billboard
+              renderOrder={30}
+              depthTest={false}
+              material-depthWrite={false}
+            >
               {countdownText[gameType] || '...'}
             </Text>
           )}

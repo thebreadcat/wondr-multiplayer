@@ -157,6 +157,85 @@ io.on('connection', (socket) => {
   });
 
   // Handle tag events from clients
+  // Handle penalty for players who jump off the map during tag game
+  socket.on('penaltyTag', (data) => {
+    const { gameType, roomId, playerId, reason } = data || {};
+    
+    // Safety check - ensure we have required data
+    if (!playerId || !roomId) {
+      console.error(`❌ [SERVER] Invalid penalty tag event received:`, data);
+      return;
+    }
+    
+    // Find the game
+    let game = activeGames[roomId];
+    let actualRoomId = roomId;
+    
+    // Validate the game exists
+    if (!game) {
+      console.log(`[SERVER] ❌ Penalty tag failed: No active game found for ${roomId}`);
+      return;
+    }
+    
+    // Ensure the game is in playing state
+    if (game.state !== 'playing') {
+      console.log(`[SERVER] ❌ Penalty tag failed: Game is not in playing state (${game.state})`);
+      return;
+    }
+    
+    // Validate that the player is actually in the game
+    if (!game.players.includes(playerId)) {
+      console.log(`[SERVER] ⛔ REJECTED: Player ${playerId.substring(0, 6)} is not a player in this game`);
+      return;
+    }
+    
+    // If the player is already IT, no need to change anything
+    if (game.taggedPlayerId === playerId) {
+      console.log(`[SERVER] Player ${playerId.substring(0, 6)} is already IT, no change needed`);
+      return;
+    }
+    
+    console.log(`[SERVER] 🔄 PENALTY: Player ${playerId.substring(0, 6)} jumped off map and is now IT`);
+    
+    // Update the tagged player to be the one who jumped off
+    game.taggedPlayerId = playerId;
+    
+    // Send notifications about the penalty tag
+    game.players.forEach(pid => {
+      const playerSocket = io.sockets.sockets.get(pid);
+      if (playerSocket) {
+        // Send a special penalty tag event so clients can show appropriate UI
+        playerSocket.emit('playerPenaltyTagged', {
+          roomId: actualRoomId,
+          gameType: game.gameType,
+          playerId: playerId,
+          reason: reason || 'jumped_off_map',
+          timestamp: Date.now()
+        });
+        
+        // Also send regular game state update
+        playerSocket.emit('gameStateUpdate', {
+          roomId: actualRoomId,
+          gameType: game.gameType,
+          state: 'playing',
+          players: game.players,
+          taggedPlayerId: playerId,
+          endTime: game.endTime
+        });
+      }
+    });
+    
+    // Also send a global state update with minimal data
+    io.emit('gameStateUpdate', {
+      roomId: actualRoomId,
+      gameType: game.gameType,
+      state: 'playing',
+      taggedPlayerId: playerId
+    });
+    
+    console.log(`[SERVER] ✅ SUCCESS: Player ${playerId.substring(0, 6)} is now IT due to penalty in ${actualRoomId}`);
+  });
+
   socket.on('tagPlayer', (data) => {
     // Extract data with support for both naming conventions (taggerId/sourceId)
     const { 
@@ -393,6 +472,24 @@ io.on('connection', (socket) => {
 
   socket.on('playerEnteredZone', (data) => {
     const { gameType, roomId: incomingRoomId } = data;
+    
+    // Check if there's already an active game of this type
+    if (currentActiveGame[gameType]) {
+      const activeGameId = currentActiveGame[gameType];
+      const activeGame = activeGames[activeGameId];
+      
+      if (activeGame && activeGame.state === 'playing') {
+        console.log(`[SERVER] Player ${socket.id} tried to join ${gameType} but game is already active`);
+        // Notify the client that they can't join an active game
+        socket.emit('gameJoinRejected', { 
+          gameType, 
+          reason: 'active_game', 
+          message: 'Cannot join while a game is in progress' 
+        });
+        return;
+      }
+    }
+    
     if (!playersInGameZones[gameType]) playersInGameZones[gameType] = new Set();
     console.log(socket.id, 'joined game', gameType, 'with room id', incomingRoomId);
     playersInGameZones[gameType].add(socket.id);
@@ -429,8 +526,10 @@ io.on('connection', (socket) => {
       playerQueues[gameType] = playerQueues[gameType].filter(id => id !== socket.id);
       const config = localGameConfig(gameType);
       if (queueCountdowns[gameType] && playerQueues[gameType].length < config.minPlayers) {
+        console.log(`[SERVER] Cancelling ${gameType} countdown - not enough players (${playerQueues[gameType].length}/${config.minPlayers})`);
         queueCountdowns[gameType] = false;
-        io.to(roomId).emit('gameJoinCountdown', { gameType, action: 'cancelled' });
+        // Broadcast the cancellation to ALL clients, not just those in a room
+        io.emit('gameJoinCountdown', { gameType, action: 'cancelled', roomId });
       }
     }
   });
@@ -607,31 +706,41 @@ function endGame(io, roomId) {
   // Remove this game from the current active game mapping
   delete currentActiveGame[game.gameType];
   
-  // Set a cleanup timer to fully remove the game after the ceremony time
+  // IMMEDIATE CLEANUP: Clear player queues right away to prevent stale queue issues
+  console.log(`[SERVER] 🧹 Immediately clearing player queue for ${game.gameType}`);
+  playerQueues[game.gameType] = [];
+  
+  // Reset zone player tracking to allow new games to start
+  if (playersInGameZones[game.gameType]) {
+    playersInGameZones[game.gameType].clear();
+    console.log(`[SERVER] 🧹 Immediately cleared join zone state for ${game.gameType}`);
+  }
+  
+  // Reset any active countdown
+  if (queueCountdowns[game.gameType]) {
+    queueCountdowns[game.gameType] = false;
+    console.log(`[SERVER] 🔄 Immediately resetting countdown for ${game.gameType}`);
+  }
+  
+  // Set a cleanup timer to fully remove the game object after the ceremony time
   setTimeout(() => {
     console.log(`[SERVER] 🧹 Cleaning up ended game ${roomId}`);
     
     // If the game is still in the ended state (hasn't been restarted), clean it up
     if (activeGames[roomId] && activeGames[roomId].state === 'ended') {
-      // Reset zone player tracking to allow new games to start
-      // CRITICAL FIX: We need to fully clear the playersInGameZones tracking
-      // to allow the join zone to be reactivated
-      if (playersInGameZones[game.gameType]) {
-        // Clear all players from the zone tracking to reset state
+      // Double check that the queues and zones are still clear
+      // (this is redundant with the immediate cleanup, but serves as a safety check)
+      if (playerQueues[game.gameType] && playerQueues[game.gameType].length > 0) {
+        console.log(`[SERVER] ⚠️ WARNING: Player queue for ${game.gameType} was not empty during final cleanup`);
+        playerQueues[game.gameType] = [];
+      }
+      
+      if (playersInGameZones[game.gameType] && playersInGameZones[game.gameType].size > 0) {
+        console.log(`[SERVER] ⚠️ WARNING: Join zone tracking for ${game.gameType} was not empty during final cleanup`);
         playersInGameZones[game.gameType].clear();
-        console.log(`[SERVER] 🧹 Completely cleared join zone state for ${game.gameType}`);
       }
       
-      // Reset the queue for this game type to allow new countdowns
-      if (queueCountdowns[game.gameType]) {
-        queueCountdowns[game.gameType] = false;
-        console.log(`[SERVER] 🔄 Resetting countdown for ${game.gameType}`);
-      }
-      
-      // Allow the zone entry handling to rebuild the player queue
-      playerQueues[game.gameType] = [];
-      
-      // Finally, clean up the actual game
+      // Finally, clean up the actual game object
       delete activeGames[roomId];
       console.log(`[SERVER] 🗑️ Removed ended game ${roomId}`);
     } else {
