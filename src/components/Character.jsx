@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useGLTF, useAnimations } from '@react-three/drei';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils';
+import * as THREE from 'three';
 
 const MODEL_PATH = '/models/character.glb';
 useGLTF.preload(MODEL_PATH);
@@ -24,10 +25,28 @@ export function Character({
     const root = cloned.getObjectByName('fall_guys') || cloned;
     animationRef.current = root;
 
-    // Clone materials once
+    // Create new clean materials for all meshes
+    const newMaterial = new THREE.MeshStandardMaterial({
+      roughness: 0.5,
+      metalness: 0.2,
+    });
+
+    // Apply the new material to all meshes
     cloned.traverse((child) => {
-      if (child.isMesh && child.material) {
-        child.material = child.material.clone();
+      if (child.isMesh) {
+        // Save original material properties we want to keep
+        const originalMaterial = child.material;
+        const originalSide = originalMaterial.side;
+        const originalTransparent = originalMaterial.transparent;
+        const originalOpacity = originalMaterial.opacity;
+        
+        // Clone our new material for each mesh
+        child.material = newMaterial.clone();
+        
+        // Preserve important original properties
+        child.material.side = originalSide;
+        child.material.transparent = originalTransparent;
+        child.material.opacity = originalOpacity;
       }
     });
   }, [scene]);
@@ -36,8 +55,19 @@ export function Character({
   useEffect(() => {
     if (!localScene) return;
     localScene.traverse((child) => {
-      if (child.isMesh && child.material && child.material.color) {
+      if (child.isMesh && child.material) {
+        // Make sure all meshes receive the same exact color
         child.material.color.set(color);
+        // Disable any maps or textures that might interfere with the color
+        child.material.map = null;
+        child.material.emissiveMap = null;
+        child.material.normalMap = null;
+        child.material.specularMap = null;
+        child.material.roughnessMap = null;
+        child.material.metalnessMap = null;
+        child.material.alphaMap = null;
+        child.material.aoMap = null;
+        child.material.lightMap = null;
       }
     });
   }, [color, localScene]);

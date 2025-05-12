@@ -16,7 +16,7 @@ export const tagConfig = {
   // Join zone location
   joinZone: {
     center: [-8, -0.75, -5], // Position the join zone away from spawn points
-    radius: 5, // Larger radius to make it much easier to join
+    radius: 1.67, // Reduced to match the visual cylinder (1/3 of original 5 radius)
   },
   
   // Spawn positions for all players (same location)

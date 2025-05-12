@@ -7,7 +7,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useMultiplayer } from '../MultiplayerProvider';
 import { useGameSystem } from '../GameSystemProvider';
 import { getSocket } from '../../utils/socketManager';
-import { Sphere } from '@react-three/drei';
+import { Cylinder } from '@react-three/drei';
 
 // Default settings
 const DEFAULT_JOIN_ZONE_RADIUS = 5;
@@ -31,6 +31,9 @@ const GameZoneSystem = ({
 
   // State to track if player is in zone
   const [isInZone, setIsInZone] = useState(false);
+  
+  // Default cylinder height
+  const cylinderHeight = 10;
   
   // Stabilization counter refs - use per-player per-game counters for zone entry/exit
   const zoneEntryCountersRef = useRef({});
@@ -126,9 +129,13 @@ const GameZoneSystem = ({
   return (
     <>
       {showVisualDebug && (
-        <Sphere position={zonePosition} args={[zoneRadius, 32, 32]}>
+        <Cylinder 
+          position={zonePosition} 
+          args={[zoneRadius, zoneRadius, cylinderHeight, 32]} 
+          rotation={[Math.PI / 2, 0, 0]}
+        >
           <meshBasicMaterial color={zoneColor} transparent opacity={0.3} />
-        </Sphere>
+        </Cylinder>
       )}
       {children ? children({ isInZone }) : null}
     </>

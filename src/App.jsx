@@ -10,7 +10,6 @@ import { GameSystemProvider } from './components/GameSystemProvider';
 import EmojiButton from './components/EmojiButton';
 import { PlayerList } from './components/PlayerList';
 import { StatsMonitor } from './components/StatsMonitor';
-import { GameTimerDemo } from './components/GameTimer';
 import TagGameOverlay from './games/tag/TagGameOverlay';
 
 const keyboardMap = [

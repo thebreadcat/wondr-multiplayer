@@ -150,14 +150,18 @@ function GameElements3D() {
       
       console.log(`[GameElements3D] Rendering join zone for ${gameType}, active: ${isGameActive}`);
 
+      // Cylinder properties
+      const cylinderHeight = 10;
+      const cylinderRadius = joinZone.radius || 1; // Use exact radius from config
+      
       return (
         <group key={gameType}>
-          <mesh position={position} scale={scale}>
-            <boxGeometry />
+          <mesh position={[position[0], position[1] + (cylinderHeight/2), position[2]]}>
+            <cylinderGeometry args={[cylinderRadius, cylinderRadius, cylinderHeight, 32]} />
             <meshStandardMaterial color={zoneColor} transparent opacity={zoneOpacity} />
           </mesh>
           <Text
-            position={[position[0], position[1] + 1, position[2]]}
+            position={[position[0], position[1] + cylinderHeight + 0.5, position[2]]}
             fontSize={0.5}
             color={isGameActive ? "#888" : "#000"}
             anchorX="center"
