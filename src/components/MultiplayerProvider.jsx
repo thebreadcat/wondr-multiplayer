@@ -496,6 +496,34 @@ export function MultiplayerProvider({ characterColor, position, children }) {
     };
   }, []);
 
+  // Function to teleport player to a specific position
+  const teleportPlayer = useCallback((position) => {
+    if (!socketRef.current || !socketRef.current.connected || !myId) return;
+    
+    console.log('[MultiplayerProvider] Teleporting player to:', position);
+    
+    // Update local state immediately
+    setPlayers(prev => {
+      const currentPlayer = prev[myId];
+      if (!currentPlayer) return prev;
+      
+      return {
+        ...prev,
+        [myId]: {
+          ...currentPlayer,
+          position: position
+        }
+      };
+    });
+    
+    // Send update to server with high priority (not throttled)
+    socketRef.current.emit('player-move', {
+      id: myId,
+      position,
+      isTeleport: true // Flag to indicate this is a teleport, not regular movement
+    });
+  }, [socketRef, myId]);
+
   const value = {
     players,
     myId,
@@ -505,6 +533,7 @@ export function MultiplayerProvider({ characterColor, position, children }) {
     sendMove: throttledSendMove, // Use throttled version
     resendMyAnimation,
     requestResync,
+    teleportPlayer, // Add the teleport function to the context
   };
 
   return (

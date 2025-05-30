@@ -10,10 +10,17 @@ import { RigidBody } from '@react-three/rapier';
 import TagPlayerIndicator from '../games/tag/TagPlayerIndicator';
 
 export default function RemotePlayer({ player }) {
-  const { color, rotation = 0, animation = 'idle', id } = player;
+  // Always ensure animation is set to idle as fallback
+  const { color, rotation = 0, id } = player;
+  const animation = player.animation || 'idle';
   const { emojis } = useMultiplayer();
   const characterRef = useRef();
   const defaultPosition = [0, 2, 0];
+  
+  // Log remote player initialization
+  useEffect(() => {
+    console.log(`[RemotePlayer] Initializing player ${id} with animation: ${animation}`);
+  }, []);
 
   // Update physics position when network data arrives
   useEffect(() => {

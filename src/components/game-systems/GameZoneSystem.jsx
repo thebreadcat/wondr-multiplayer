@@ -13,7 +13,8 @@ import { Cylinder } from '@react-three/drei';
 const DEFAULT_JOIN_ZONE_RADIUS = 5;
 const DEFAULT_STABILIZATION_THRESHOLD = 3;
 
-const GameZoneSystem = ({
+// Using React.memo to prevent unnecessary re-renders
+const GameZoneSystem = React.memo(function GameZoneSystem({
   gameType,
   zonePosition = [0, 0, 0],
   zoneRadius = DEFAULT_JOIN_ZONE_RADIUS,
@@ -25,10 +26,21 @@ const GameZoneSystem = ({
   zoneColor = 'rgba(0, 255, 0, 0.2)',
   isGameActive = false,
   children,
-}) => {
+}) {
   const { myId, players } = useMultiplayer();
   const { activeGames, gameJoinStatus } = useGameSystem();
   const socket = getSocket();
+  
+  // Only log on first render using useRef
+  const isFirstRender = useRef(true);
+  
+  // Debug logging only on first render
+  useEffect(() => {
+    if (isFirstRender.current) {
+      console.log(`[GameZoneSystem] Initializing zone for ${gameType} at position:`, zonePosition);
+      isFirstRender.current = false;
+    }
+  }, [gameType, zonePosition]);
 
   // State to track if player is in zone
   const [isInZone, setIsInZone] = useState(false);
@@ -183,6 +195,6 @@ const GameZoneSystem = ({
       {children ? children({ isInZone }) : null}
     </>
   );
-};
+});
 
 export default GameZoneSystem;

@@ -4,11 +4,14 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Vector3, Euler, MathUtils } from "three";
 import { CapsuleCollider, RigidBody, useRapier } from "@react-three/rapier";
 import { Character } from "./Character";
+import { PlayerSkateboard } from "./Skateboard";
 import { Html, useKeyboardControls } from "@react-three/drei";
 import { useMultiplayer } from "./MultiplayerProvider";
 import { useGameSystem } from "./GameSystemProvider";
 import styles from "./RemotePlayer.module.css";
 import TagPlayerIndicator from "../games/tag/TagPlayerIndicator";
+import { handleGameCollision } from "../utils/handleGameCollision";
+import { useCameraStore } from "./CameraToggleButton";
 
 // Throttle function to limit how often a function gets called
 const throttle = (callback, delay) => {
@@ -60,7 +63,7 @@ const releaseVector3ToPool = (vector) => {
   vector3Pool.push(vector);
 };
 
-export function CharacterController({ initialPosition, characterColor, setLocalPosition }) {
+export function CharacterController({ initialPosition = [0, 0, 0], characterColor, setLocalPosition, showSkateboard = false }) {
   const rigidBody = useRef();
   const character = useRef();
   const container = useRef();
@@ -68,10 +71,25 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
   const { sendMove, sendEmoji, emoji, myId, emojis } = useMultiplayer();
   const { activeGames } = useGameSystem();
   
+  // Define state variables first
+  const [isOnGround, setIsOnGround] = useState(true); // Start as on ground
+  const wasInAir = useRef(false);
+  const [animationState, setAnimationState] = useState("idle");
+  const jumpAnimationTimer = useRef(null);
+  const lastGroundCheckTime = useRef(0);
+  const groundCheckInterval = useRef(300); // Check every 300ms
+  
   // Create throttled sendMove function to limit network traffic
   const throttledSendMove = useMemo(
-    () => throttle((data) => sendMove(data), 50), // Limit to 20 updates per second
-    [sendMove]
+    () => throttle((data) => {
+      // Always ensure animation state is included in network updates
+      const updatedData = {
+        ...data,
+        animation: data.animation || animationState
+      };
+      sendMove(updatedData);
+    }, 50), // Limit to 20 updates per second
+    [sendMove, animationState]
   );
 
   // Add initial position with offset
@@ -81,14 +99,19 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
     initialPosition[2]
   ];
 
-  const [isOnGround, setIsOnGround] = useState(false);
-  const [animationState, setAnimationState] = useState("idle");
-
   const cameraTarget = useRef();
   const cameraPosition = useRef();
+  const firstPersonCameraPosition = useRef();
   const cameraWorldPosition = useRef(new Vector3());
   const cameraLookAtWorldPosition = useRef(new Vector3());
   const cameraLookAt = useRef(new Vector3());
+  
+  // Get camera mode from the global store
+  const { isFirstPerson } = useCameraStore();
+  
+  // Track previous camera mode to handle transitions
+  const previousCameraMode = useRef(false);
+  const cameraTransitionTime = useRef(0);
 
   const characterRotationTarget = useRef(0);
   const rotationTarget = useRef(0);
@@ -100,6 +123,29 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
 
   // Track current position for respawn with offset
   const currentPosition = useRef(adjustedInitialPosition);
+
+  // Initialize animation on mount and handle cleanup
+  useEffect(() => {
+    // Ensure we start with the idle animation
+    console.log('[CharacterController] Initializing with idle animation');
+    setAnimationState('idle');
+    
+    // Send initial animation state to server
+    sendMove({
+      position: adjustedInitialPosition,
+      rotation: 0,
+      animation: 'idle',
+      color: characterColor,
+    });
+    
+    // Clean up timers on unmount
+    return () => {
+      if (jumpAnimationTimer.current) {
+        clearTimeout(jumpAnimationTimer.current);
+        jumpAnimationTimer.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Use passive event listeners for improved performance
@@ -133,6 +179,12 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       // Clear accumulated data
       movementAccumulator.current = { x: 0, y: 0, z: 0, rotation: 0 };
       lastPosition.current = [0, 0, 0];
+      
+      // Clear any animation timers
+      if (jumpAnimationTimer.current) {
+        clearTimeout(jumpAnimationTimer.current);
+        jumpAnimationTimer.current = null;
+      }
     };
   }, []);
 
@@ -145,6 +197,106 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
     const cappedDelta = Math.min(delta, 0.1);
     const { forward, backward, left, right, run, jump } = getKeys();
     if (!rigidBody.current) return;
+    
+    // Check if camera mode changed and start transition timer
+    if (previousCameraMode.current !== isFirstPerson) {
+      cameraTransitionTime.current = 1.0; // 1 second transition
+      previousCameraMode.current = isFirstPerson;
+    }
+    
+    // Update camera transition timer
+    if (cameraTransitionTime.current > 0) {
+      cameraTransitionTime.current = Math.max(0, cameraTransitionTime.current - cappedDelta);
+    }
+    
+    // Manual ground detection as a backup
+    const now = performance.now();
+    if (now - lastGroundCheckTime.current > groundCheckInterval.current) {
+      lastGroundCheckTime.current = now;
+      
+      // Use the character's position to check if we're on ground
+      const position = rigidBody.current.translation();
+      const velocity = rigidBody.current.linvel();
+      
+      // If we're not moving vertically (or very slowly) and not too high, we're probably on ground
+      const isNotFalling = Math.abs(velocity.y) < 0.5;
+      const isCloseToGround = position.y < 2; // Adjust based on your world scale
+      
+      if (isNotFalling && isCloseToGround && !isOnGround && animationState.includes('jump')) {
+        console.log(`[CharacterController] Manual ground detection: Character appears to be on ground but isOnGround=${isOnGround}`);
+        console.log(`[CharacterController] Position: ${position.y}, Velocity Y: ${velocity.y}, Animation: ${animationState}`);
+        
+        // Force ground state update
+        setIsOnGround(true);
+        wasInAir.current = false;
+        
+        // Reset animation to idle
+        if (animationState.includes('jump')) {
+          console.log(`[CharacterController] Manually resetting jump animation to idle`);
+          setAnimationState('idle');
+          
+          // Force immediate network update
+          sendMove({
+            position: [position.x, position.y, position.z],
+            rotation: characterRotationTarget.current,
+            animation: 'idle',
+            color: characterColor,
+          });
+        }
+      }
+    }
+    
+    // Check if we need to reset animation state
+    // This handles cases where the character is moving but stuck in a non-movement animation
+    if (!jump) { // Check regardless of isOnGround status to be safe
+      const velocity = rigidBody.current.linvel();
+      const isMoving = Math.abs(velocity.x) > 0.1 || Math.abs(velocity.z) > 0.1;
+      
+      // Check if we're moving horizontally but in a non-movement animation
+      if (isMoving && animationState !== 'walk' && animationState !== 'run') {
+        // If we're in a jump animation but moving horizontally and not falling, we should be walking/running
+        const isFalling = velocity.y < -0.5;
+        
+        if (!isFalling || isOnGround) {
+          // Character is moving but not in walk/run animation, fix it
+          const movementSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+          const newAnimState = showSkateboard ? 'walk' : (movementSpeed > 4 ? 'run' : 'walk');
+          
+          console.log(`[CharacterController] Fixing animation: Character is moving but in ${animationState} animation, resetting to ${newAnimState}`);
+          console.log(`[CharacterController] isOnGround=${isOnGround}, isFalling=${isFalling}, velocity.y=${velocity.y}`);
+          
+          // If we were in a jump animation, force ground state
+          if (animationState.includes('jump')) {
+            setIsOnGround(true);
+            wasInAir.current = false;
+          }
+          
+          setAnimationState(newAnimState);
+          
+          // Force immediate network update for animation change
+          sendMove({
+            position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+            rotation: characterRotationTarget.current,
+            animation: newAnimState,
+            color: characterColor,
+          });
+        }
+      } else if (!isMoving && animationState !== 'idle' && 
+                animationState !== 'wave' && !animationState.includes('jump')) {
+        // Character is stopped but not in idle animation, fix it
+        console.log(`[CharacterController] Fixing animation: Character is stopped but in ${animationState} animation, resetting to idle`);
+        
+        setAnimationState('idle');
+        
+        // Force immediate network update for animation change
+        sendMove({
+          position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+          rotation: characterRotationTarget.current,
+          animation: 'idle',
+          color: characterColor,
+        });
+      }
+    }
 
     const velocity = rigidBody.current.linvel();
     const position = rigidBody.current.translation();
@@ -165,10 +317,21 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
     }
 
     const movement = { x: 0, z: 0 };
-    if (forward) movement.z = 1;
-    if (backward) movement.z = -1;
-    if (left) movement.x = 1;
-    if (right) movement.x = -1;
+    
+    // Handle movement differently based on camera mode
+    if (isFirstPerson) {
+      // First-person movement is relative to camera direction
+      if (forward) movement.z = 1;
+      if (backward) movement.z = -1;
+      if (left) movement.x = 1; // Match third-person controls
+      if (right) movement.x = -1; // Match third-person controls
+    } else {
+      // Third-person movement (original behavior)
+      if (forward) movement.z = 1;
+      if (backward) movement.z = -1;
+      if (left) movement.x = 1;
+      if (right) movement.x = -1;
+    }
 
     let speed = run ? RUN_SPEED : WALK_SPEED;
 
@@ -184,11 +347,63 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       characterRotationTarget.current = Math.atan2(movement.x, movement.z);
       velocity.x = Math.sin(rotationTarget.current + characterRotationTarget.current) * speed;
       velocity.z = Math.cos(rotationTarget.current + characterRotationTarget.current) * speed;
-      if (isOnGround) setAnimationState(speed === RUN_SPEED ? "run" : "walk");
+      
+      // Set animation state based on skateboard status
+      if (isOnGround) {
+        const newAnimState = showSkateboard ? "walk" : (speed === RUN_SPEED ? "run" : "walk");
+        if (animationState !== newAnimState) {
+          console.log(`[CharacterController] Setting animation to ${newAnimState} from ${animationState}`);
+          setAnimationState(newAnimState);
+          
+          // Force immediate network update for animation change
+          sendMove({
+            position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+            rotation: characterRotationTarget.current,
+            animation: newAnimState,
+            color: characterColor,
+          });
+        }
+      }
     } else {
+      // Apply friction to slow down when no movement input
       velocity.x *= 0.8;
       velocity.z *= 0.8;
-      if (isOnGround) setAnimationState("idle");
+      
+      // Check if we're actually moving (not just from momentum) before setting idle
+      const isMoving = Math.abs(velocity.x) > 0.1 || Math.abs(velocity.z) > 0.1;
+      
+      if (isOnGround && !isMoving) {
+        // Set to idle if we're truly stopped
+        if (animationState !== "idle") {
+          console.log(`[CharacterController] Setting animation to idle from ${animationState}`);
+          setAnimationState("idle");
+          
+          // Force immediate network update for animation change
+          sendMove({
+            position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+            rotation: characterRotationTarget.current,
+            animation: "idle",
+            color: characterColor,
+          });
+        }
+      } else if (isOnGround && isMoving) {
+        // We're still moving from momentum, keep the walk animation
+        const movementSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+        const newAnimState = showSkateboard ? "walk" : (movementSpeed > 4 ? "run" : "walk");
+        
+        if (animationState !== newAnimState) {
+          console.log(`[CharacterController] Setting animation to ${newAnimState} from ${animationState}`);
+          setAnimationState(newAnimState);
+          
+          // Force immediate network update for animation change
+          sendMove({
+            position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+            rotation: characterRotationTarget.current,
+            animation: newAnimState,
+            color: characterColor,
+          });
+        }
+      }
     }
 
     // Memoize physics calculations to avoid recalculation every frame
@@ -207,14 +422,45 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       jumpCooldown.current = totalJumpTime;
       jumpInProgress.current = true;
       
-      // Use requestAnimationFrame for smoother animation state changes
-      requestAnimationFrame(() => {
-        setAnimationState("jump_up");
-        // Still track ground state for animation purposes
-        if (isOnGround) {
-          setIsOnGround(false);
-        }
+      // Clear any existing jump animation timers
+      if (jumpAnimationTimer.current) {
+        clearTimeout(jumpAnimationTimer.current);
+        jumpAnimationTimer.current = null;
+      }
+      
+      // Set jump animation immediately
+      setAnimationState("jump_up");
+      
+      // Force immediate network update for animation change
+      sendMove({
+        position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+        rotation: characterRotationTarget.current,
+        animation: "jump_up",
+        color: characterColor,
       });
+      
+      console.log('[CharacterController] Starting jump animation');
+      
+      // Still track ground state for animation purposes
+      if (isOnGround) {
+        setIsOnGround(false);
+        wasInAir.current = true; // Set wasInAir flag when jumping
+      }
+      
+      // Safety timer to reset animation if we get stuck
+      jumpAnimationTimer.current = setTimeout(() => {
+        if (animationState === "jump_up") {
+          console.log('[CharacterController] Safety timer resetting jump animation');
+          setAnimationState("idle");
+          sendMove({
+            position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+            rotation: characterRotationTarget.current,
+            animation: "idle",
+            color: characterColor,
+          });
+        }
+        jumpAnimationTimer.current = null;
+      }, 1500); // 1.5 second safety timer
     }
     wasJumpPressed.current = jump;
 
@@ -279,24 +525,44 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
     }
 
     // Update camera position using refs with delta-time interpolation
-    if (cameraPosition.current && cameraTarget.current) {
-      // Get world positions
-      cameraPosition.current.getWorldPosition(cameraWorldPosition.current);
+    if (cameraTarget.current) {
+      // Get target world position (where we're looking at)
       cameraTarget.current.getWorldPosition(cameraLookAtWorldPosition.current);
-
-      // Calculate lerp factor based on delta time
+      
+      // Always use smooth interpolation for camera transitions
+      // Use slower interpolation when transitioning between views
       const positionLerpFactor = cameraSpeed * (60 * cappedDelta); // Normalize by target framerate
       
-      // Smoothly move camera with delta-time interpolation
-      state.camera.position.lerp(cameraWorldPosition.current, positionLerpFactor);
-      cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, positionLerpFactor);
-      state.camera.lookAt(cameraLookAt.current);
+      if (isFirstPerson) {
+        // First person camera - position camera at character's head
+        if (firstPersonCameraPosition.current) {
+          firstPersonCameraPosition.current.getWorldPosition(cameraWorldPosition.current);
+          
+          // Smoothly move camera to first person position
+          state.camera.position.lerp(cameraWorldPosition.current, positionLerpFactor * 0.5);
+          
+          // Look in the direction the character is facing
+          const lookDirection = new Vector3(0, 0, 1).applyQuaternion(container.current.quaternion);
+          cameraLookAt.current.copy(state.camera.position).add(lookDirection);
+          state.camera.lookAt(cameraLookAt.current);
+        }
+      } else {
+        // Third person camera - original camera behavior
+        if (cameraPosition.current) {
+          cameraPosition.current.getWorldPosition(cameraWorldPosition.current);
+          
+          // Smoothly move camera with delta-time interpolation
+          state.camera.position.lerp(cameraWorldPosition.current, positionLerpFactor * 0.5);
+          cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, positionLerpFactor);
+          state.camera.lookAt(cameraLookAt.current);
+        }
+      }
     }
 
     // Get current position
     const worldPosition = position;
     currentPosition.current = [worldPosition.x, worldPosition.y, worldPosition.z];
-
+    
     // Check if fallen too far
     if (worldPosition.y < -25) {
       // Check if player is in an active tag game
@@ -378,33 +644,174 @@ export function CharacterController({ initialPosition, characterColor, setLocalP
       enabledRotations={[false, false, false]}
       linearDamping={0.95} // Add damping for smoother physics
       angularDamping={0.95}
-      onCollisionEnter={() => {
-        if (!rigidBody.current) return;
+      name="player" // Add name property for join zone detection
+      onCollisionEnter={({ other }) => {
+        const otherId = other.rigidBodyObject?.userData?.id;
+        const otherType = other.rigidBodyObject?.userData?.type;
+        const otherName = other.rigidBodyObject?.name || 'unknown';
         
-        // Use requestAnimationFrame for smoother state changes
-        requestAnimationFrame(() => {
+        console.log(`[CharacterController] Collision enter with: ${otherName}`);
+        
+        // Handle ground collision for animation
+        if (other.rigidBodyObject?.name === 'ground' || 
+            other.rigidBodyObject?.name?.includes('floor') || 
+            other.rigidBodyObject?.name?.includes('terrain') || 
+            other.rigidBodyObject?.name?.includes('platform')) {
+          
+          console.log(`[CharacterController] Ground collision detected, setting isOnGround=true`);
           setIsOnGround(true);
-          const vel = rigidBody.current?.linvel();
-          const isMoving = vel && (Math.abs(vel.x) > 0.1 || Math.abs(vel.z) > 0.1);
-          setAnimationState(isMoving ? "walk" : "idle");
+          
+          // If we were in the air and now landed, play landing animation
+          if (wasInAir.current) {
+            console.log(`[CharacterController] Landing from jump, setting animation to idle`);
+            
+            // Clear any existing jump animation timers
+            if (jumpAnimationTimer.current) {
+              clearTimeout(jumpAnimationTimer.current);
+              jumpAnimationTimer.current = null;
+            }
+            
+            // Force immediate animation change to idle
+            setAnimationState('idle');
+            
+            // Force immediate network update for animation change
+            sendMove({
+              position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+              rotation: characterRotationTarget.current,
+              animation: 'idle',
+              color: characterColor,
+            });
+            
+            // Reset the wasInAir flag
+            wasInAir.current = false;
+            
+            // Check velocity after landing to determine if we should transition to walk/run
+            const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+            if (horizontalSpeed > 0.1) {
+              // If we're still moving after landing, update animation in the next frame
+              setTimeout(() => {
+                // Make sure the rigid body reference is still valid
+                if (!rigidBody.current) return;
+                
+                const newSpeed = Math.sqrt(
+                  rigidBody.current.linvel().x * rigidBody.current.linvel().x + 
+                  rigidBody.current.linvel().z * rigidBody.current.linvel().z
+                );
+                
+                // Only update if we're still moving
+                if (newSpeed > 0.1) {
+                  const newAnimState = showSkateboard ? 'walk' : (newSpeed > 4 ? 'run' : 'walk');
+                  console.log(`[CharacterController] After landing, transitioning to ${newAnimState}`);
+                  
+                  setAnimationState(newAnimState);
+                  
+                  // Force immediate network update for animation change
+                  sendMove({
+                    position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+                    rotation: characterRotationTarget.current,
+                    animation: newAnimState,
+                    color: characterColor,
+                  });
+                }
+              }, 100); // Shorter delay for more responsive animation
+              
+              // Add a second check with longer delay as a backup
+              setTimeout(() => {
+                // Make sure the rigid body reference is still valid and we're still on ground
+                if (!rigidBody.current || !isOnGround) return;
+                
+                const currentSpeed = Math.sqrt(
+                  rigidBody.current.linvel().x * rigidBody.current.linvel().x + 
+                  rigidBody.current.linvel().z * rigidBody.current.linvel().z
+                );
+                
+                // Only update if we're still moving and not already in walk/run
+                if (currentSpeed > 0.1 && animationState !== 'walk' && animationState !== 'run') {
+                  const newAnimState = showSkateboard ? 'walk' : (currentSpeed > 4 ? 'run' : 'walk');
+                  console.log(`[CharacterController] Backup check: Still moving but not in walk/run, transitioning to ${newAnimState}`);
+                  
+                  setAnimationState(newAnimState);
+                  
+                  // Force immediate network update for animation change
+                  sendMove({
+                    position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+                    rotation: characterRotationTarget.current,
+                    animation: newAnimState,
+                    color: characterColor,
+                  });
+                }
+              }, 300); // Longer delay as a backup check
+            }
+          }
+        }
+      
+        if (!otherType || !otherId) return;
+      
+        // Send this to a centralized game collision handler
+        handleGameCollision({
+          localId: myId,
+          otherId,
+          otherType,
+          activeGames,
+          socket: window.gameSocket,
         });
       }}
-      onCollisionExit={() => requestAnimationFrame(() => setIsOnGround(false))}
+      onCollisionExit={({ other }) => {
+        const otherName = other.rigidBodyObject?.name || 'unknown';
+        console.log(`[CharacterController] Collision exit with: ${otherName}`);
+        
+        // Only set not on ground if we're leaving a ground/floor collision
+        if (other.rigidBodyObject?.name === 'ground' || 
+            other.rigidBodyObject?.name?.includes('floor') || 
+            other.rigidBodyObject?.name?.includes('terrain') || 
+            other.rigidBodyObject?.name?.includes('platform')) {
+          
+          console.log(`[CharacterController] Left ground, setting isOnGround=false`);
+          
+          // Use setTimeout instead of requestAnimationFrame for more reliable timing
+          setTimeout(() => {
+            setIsOnGround(false);
+            wasInAir.current = true;
+            console.log(`[CharacterController] isOnGround set to false, wasInAir set to true`);
+          }, 50); // Short delay to avoid race conditions
+        }
+      }}
     >
       <group ref={container}>
         <group ref={cameraTarget} position-z={1.5} position-y={1 + VERTICAL_OFFSET} />
         <group ref={cameraPosition} position-y={3 + VERTICAL_OFFSET} position-z={-5} />
-        <group ref={character}>
-          <Character color={characterColor} animation={animationState} />
-          {emoji && (
-            <Html position={[0, 1 + VERTICAL_OFFSET, 0]} center distanceFactor={8}>
-              <div className={styles.emojiContainer}>{emoji}</div>
-            </Html>
-          )}
-          
-          {/* Tag game indicator for local player */}
-          <TagPlayerIndicator playerId={myId} />
-        </group>
+        <group ref={firstPersonCameraPosition} position-y={1.2 + VERTICAL_OFFSET} position-z={0.1} />
+        
+        {/* Only show character model in third-person view */}
+        {!isFirstPerson && (
+          <>
+            {/* Add skateboard under the player's feet if enabled */}
+            {showSkateboard && (
+              <group
+                position={[0, animationState.includes('jump') ? -0.02 : -0.038, 0]} // Change vertical position based on jump state
+              >
+                <PlayerSkateboard 
+                  scale={0.0055} 
+                  position={[0, 0, 0]} // Position relative to the parent group
+                  rotation={character.current ? [0, character.current.rotation.y, 0] : [0, 0, 0]}
+                />
+              </group>
+            )}
+            
+            <group ref={character}>
+              <Character 
+                color={characterColor} 
+                animation={animationState} 
+              />
+              {emoji && (
+                <Html position={[0, 1 + VERTICAL_OFFSET, 0]} center distanceFactor={8}>
+                  <div className={styles.emojiContainer}>{emoji}</div>
+                </Html>
+              )}
+              <TagPlayerIndicator playerId={myId} />
+            </group>
+          </>
+        )}
       </group>
       <CapsuleCollider args={[0.3, 0.3]} position={[0, 0.8 + VERTICAL_OFFSET, 0]} />
     </RigidBody>

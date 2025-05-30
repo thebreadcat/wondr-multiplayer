@@ -4,13 +4,18 @@ import { Canvas } from "@react-three/fiber";
 import { Experience } from "./components/Experience";
 import CustomizeButton from './components/CustomizeButton';
 import CharacterCreator from './components/CharacterCreator';
-import EmojiOverlay from './components/EmojiOverlay';
+import EmojiButton from "./components/EmojiButton";
+import CameraToggleButton from "./components/CameraToggleButton";
 import { MultiplayerProvider } from './components/MultiplayerProvider';
 import { GameSystemProvider } from './components/GameSystemProvider';
-import EmojiButton from './components/EmojiButton';
 import { PlayerList } from './components/PlayerList';
 import { StatsMonitor } from './components/StatsMonitor';
+import { RaceGame3D, RaceGameUI } from './games/race';
+import RaceHUD from './games/race/RaceHUD';
 import TagGameOverlay from './games/tag/TagGameOverlay';
+import PhoneMenu, { PhoneMenuButton } from './components/PhoneMenu';
+
+// Using simpler approach without 3D context provider
 
 const keyboardMap = [
   { name: "forward", keys: ["ArrowUp", "KeyW"] },
@@ -29,6 +34,28 @@ const COLORS = [
 ];
 
 function App() {
+  // Extract roomId from URL or use default
+  const [roomId, setRoomId] = useState(() => {
+    // Try to get roomId from URL path
+    const pathSegments = window.location.pathname.split('/');
+    const roomFromPath = pathSegments.length > 1 && pathSegments[1] ? pathSegments[1] : null;
+    
+    // Use roomId from URL or default to "main-room"
+    const defaultRoomId = "main-room";
+    const effectiveRoomId = roomFromPath || defaultRoomId;
+    
+    // Set a global shared room ID for all components to access
+    window.sharedRoomId = effectiveRoomId;
+    
+    console.log(`[App] Using roomId: ${effectiveRoomId}${roomFromPath ? ' (from URL)' : ' (default)'}`); 
+    console.log(`[App] Set global window.sharedRoomId = ${window.sharedRoomId}`);
+    
+    return effectiveRoomId;
+  });
+  
+  // --- Race Game state ---
+  const [showRaceGame, setShowRaceGame] = useState(false);
+  const [raceRoomId] = useState(() => roomId);
   function getCookie(name) {
     const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
     return match ? decodeURIComponent(match[2]) : null;
@@ -44,6 +71,23 @@ function App() {
 
   const [showCreator, setShowCreator] = useState(false);
   const [characterColor, setCharacterColor] = useState(getRandomColor());
+  const [showEmojiOverlay, setShowEmojiOverlay] = useState(false);
+  const [showRaceBuilder, setShowRaceBuilder] = useState(false);
+  const [showThirdPerson, setShowThirdPerson] = useState(false);
+  const [showPhoneMenu, setShowPhoneMenu] = useState(false);
+  const [showSkateboard, setShowSkateboard] = useState(false);
+  
+  // Race socket handlers are now managed by the RaceSocketListeners component
+  
+  // Notification system is now handled by the race components directly
+
+  // Create a global function to hide the race builder panel that can be accessed from the race system
+  useEffect(() => {
+    window.hideRaceBuilderPanel = () => setShowRaceBuilder(false);
+    return () => {
+      delete window.hideRaceBuilderPanel;
+    };
+  }, []);
 
   useEffect(() => {
     const cookieColor = getCookie('characterColor');
@@ -89,20 +133,66 @@ function App() {
             {...canvasConfig}
           >
             <color attach="background" args={["#ececec"]} />
-            <Experience characterColor={characterColor} />
+            <Experience 
+              characterColor={characterColor} 
+              showRaceGame={showRaceGame} 
+              raceRoomId={raceRoomId} 
+              showSkateboard={showSkateboard}
+            />
+            
+            {/* Race Builder 3D Elements */}
+            {showRaceBuilder && <RaceGame3D roomId={raceRoomId} />}
+            
+            {/* Race Game 3D Elements are now rendered inside Experience (inside Physics) */}
           </Canvas>
+          
+          {/* Race Builder UI Components - These must be outside the Canvas */}
+          {showRaceBuilder && <RaceBuilderUI />}
+          
+          {/* Race HUD - Shows race timer and other race UI elements */}
+          <RaceHUD />
         </KeyboardControls>
-        {/* Game overlay UI - this appears outside the canvas as a true HTML overlay */}
-        <TagGameOverlay />
-        <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
-          <CustomizeButton onClick={() => setShowCreator(true)} />
+        <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000, display: 'flex', gap: 8 }}>
+          <PhoneMenuButton onClick={() => setShowPhoneMenu(true)} />
+        </div>
+        
+        {/* Phone Menu */}
+        {showPhoneMenu && (
+          <PhoneMenu 
+            isOpen={showPhoneMenu} 
+            onClose={() => setShowPhoneMenu(false)} 
+            onCustomizeClick={() => setShowCreator(true)}
+            onToggleSkateboard={() => setShowSkateboard(prev => !prev)}
+            showSkateboard={showSkateboard}
+          />
+        )}
+        <div style={{ position: 'fixed', top: 20, right: 160, zIndex: 1000, display: 'flex', gap: 8 }}>
+          <button
+            style={{
+              padding: '10px 16px',
+              backgroundColor: showRaceGame ? '#e67e22' : '#2980b9',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              marginLeft: 8
+            }}
+            onClick={(e) => {
+              setShowRaceGame((v) => !v);
+              e.currentTarget.blur(); // Remove focus after clicking to prevent spacebar toggling
+            }}
+          >
+            {showRaceGame ? 'Close Race Game' : 'Race Game'}
+          </button>
+          {/* RaceGameUI overlays/listeners outside Canvas */}
+          {showRaceGame && <RaceGameUI />}
         </div>
         <div style={{ position: 'fixed', bottom: 20, left: 20, zIndex: 1000 }}>
           <EmojiButton />
         </div>
-        <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 1000 }}>
-          <PlayerList />
-        </div>
+        <CameraToggleButton />
         <StatsMonitor />
         {showCreator && (
           <CharacterCreator

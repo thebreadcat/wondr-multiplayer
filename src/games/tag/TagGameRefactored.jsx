@@ -21,7 +21,21 @@ const GAME_DURATION = 60; // 1 minute games
 const JOIN_ZONE_POSITION = [-8, -0.75, -5]; // Same as original
 const TAG_STABILIZATION_THRESHOLD = 2; // Match original threshold
 
-const TagGameRefactored = ({ setLocalPosition }) => {
+// Using React.memo to prevent unnecessary re-renders
+const TagGameRefactored = React.memo(({ setLocalPosition, roomId }) => {
+  // Use the provided roomId, window.sharedRoomId, or default to main-room
+  const effectiveRoomId = roomId || (window.sharedRoomId || "main-room");
+  
+  // Only log on first render using useRef
+  const isFirstRender = useRef(true);
+  
+  // Log the room ID being used only on first render
+  useEffect(() => {
+    if (isFirstRender.current) {
+      console.log(`[TagGameRefactored] Using room ID: ${effectiveRoomId}`);
+      isFirstRender.current = false;
+    }
+  }, [effectiveRoomId]);
   const { myId, players } = useMultiplayer();
   const { activeGames, gameJoinStatus } = useGameSystem();
   const socket = getSocket();
@@ -38,13 +52,13 @@ const TagGameRefactored = ({ setLocalPosition }) => {
   
   // Determine game status
   const gameType = 'tag';
-  const roomId = Object.keys(activeGames || {}).find(
-    key => activeGames[key]?.gameType === gameType && activeGames[key]?.state === 'playing'
-  );
-  const isGameActive = !!roomId;
+  // Use the effective room ID instead of trying to find a room ID
+  const isGameActive = !!effectiveRoomId && activeGames && 
+    activeGames[effectiveRoomId]?.gameType === gameType && 
+    activeGames[effectiveRoomId]?.state === 'playing';
   
   // IMPORTANT: Check if current player has explicitly joined this game
-  const isPlayerInGame = !!roomId && activeGames[roomId]?.players?.includes(myId);
+  const isPlayerInGame = isGameActive && activeGames[effectiveRoomId]?.players?.includes(myId);
   
   // Debug player status
   useEffect(() => {
@@ -170,7 +184,7 @@ const TagGameRefactored = ({ setLocalPosition }) => {
     
     // Query the current game status to ensure we have accurate data
     console.log(`🔍 [TagGame] Explicitly querying game status for room ${roomId}...`);
-    socket.emit('getGameStatus', { gameType, roomId });
+    socket.emit('joinGameRequest', { gameType, playerId: myId, roomId: effectiveRoomId });
     
     // Also try with the global socket if available
     if (window.gameSocket && window.gameSocket !== socket) {
@@ -482,6 +496,6 @@ const TagGameRefactored = ({ setLocalPosition }) => {
       )}
     </>
   );
-};
+});
 
 export default TagGameRefactored;

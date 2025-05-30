@@ -1,0 +1,270 @@
+/* Phone Menu Styles */
+.phone-menu-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0px 0px;
+  z-index: 16569306;
+  width: 100vw;
+  height: 100vh;
+  right: 0;
+  bottom: 0;
+}
+
+.phone-menu-backdrop {
+  position: absolute;
+  transform: none;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.phone-menu-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 350px;
+  height: 600px;
+  background-color: #f8f9fa;
+  border-radius: 30px;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.phone-header {
+  padding: 15px;
+  background-color: #3498db;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.phone-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.phone-header button {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.phone-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.phone-navigation {
+  display: flex;
+  border-top: 1px solid #ddd;
+  background-color: #fff;
+}
+
+.nav-button {
+  flex: 1;
+  padding: 15px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #777;
+  border-top: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.nav-button.active {
+  color: #3498db;
+  border-top: 3px solid #3498db;
+}
+
+.nav-button span {
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+/* Tab Content Styles */
+.tab-content {
+  height: 100%;
+}
+
+.tab-content h2 {
+  margin-top: 0;
+  color: #333;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+/* Home Tab - App Icons */
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  padding: 10px 0;
+}
+
+.app-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.app-icon:hover {
+  transform: scale(1.05);
+}
+
+.app-icon-circle {
+  width: 60px;
+  height: 60px;
+  border-radius: 15px;
+  background-color: #3498db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.app-icon-circle.active {
+  background-color: #27ae60;
+  transform: scale(1.05);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.app-icon:nth-child(2) .app-icon-circle {
+  background-color: #e74c3c;
+}
+
+.app-icon:nth-child(3) .app-icon-circle {
+  background-color: #2ecc71;
+}
+
+.app-icon:nth-child(4) .app-icon-circle {
+  background-color: #f39c12;
+}
+
+.app-icon span {
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+}
+
+/* Games Tab */
+.game-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.game-item {
+  background-color: white;
+  border-radius: 10px;
+  padding: 15px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.game-item h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.game-item p {
+  color: #666;
+  margin-bottom: 15px;
+}
+
+.game-button {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.game-button:hover {
+  background-color: #2980b9;
+}
+
+/* Profile Tab */
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.avatar-placeholder {
+  width: 100px;
+  height: 100px;
+  background-color: #ddd;
+  border-radius: 50%;
+  margin-bottom: 15px;
+}
+
+.profile-button {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-top: 20px;
+}
+
+.profile-button:hover {
+  background-color: #2980b9;
+}
+
+/* Settings Tab */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.setting-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setting-item label {
+  font-weight: bold;
+  color: #555;
+}
+
+.setting-item input[type="range"],
+.setting-item select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #ddd;
+}
+
+.setting-item select {
+  background-color: white;
+  height: 36px;
+}

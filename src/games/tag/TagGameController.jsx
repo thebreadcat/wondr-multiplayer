@@ -9,6 +9,9 @@ import { getSocket } from '../../utils/socketManager';
 import { useFrame } from '@react-three/fiber';
 import { Sphere, Html } from '@react-three/drei';
 
+// Default room ID for all games
+const DEFAULT_ROOM_ID = 'main-room';
+
 // Custom hook to get socket
 const useSocket = () => {
   return getSocket();
@@ -35,7 +38,14 @@ const DEBUG_SPHERE_OPACITY = 0.5; // Increased opacity for better visibility
 // Default game duration in seconds for fallback cleanup
 const GAME_DURATION = 60;
 
-const TagGameController = () => {
+const TagGameController = ({ roomId }) => {
+  // Use the provided roomId, window.sharedRoomId, or default to main-room
+  const effectiveRoomId = roomId || (window.sharedRoomId || DEFAULT_ROOM_ID);
+  
+  // Log the room ID being used
+  useEffect(() => {
+    console.log(`[TagGameController] Using room ID: ${effectiveRoomId}`);
+  }, [effectiveRoomId]);
   const { myId, players } = useMultiplayer();
   const { activeGames, gameJoinStatus } = useGameSystem();
   const socket = useSocket();
@@ -201,7 +211,7 @@ const TagGameController = () => {
         
         const testPayload = {
           gameType: 'tag',
-          roomId: roomId || 'tag-1', // Fallback roomId if not set
+          roomId: effectiveRoomId, // Use shared room ID
           taggerId: myId,
           targetId: targetPlayerId
         };
@@ -505,7 +515,7 @@ const TagGameController = () => {
           try {
             const tagPayload = {
               gameType: 'tag',
-              roomId: roomId || 'tag-1',
+              roomId: effectiveRoomId, // Use shared room ID
               taggerId: myId,
               targetId: playerId,
               direct: true // Mark this as a direct collision detection
@@ -714,7 +724,7 @@ const TagGameController = () => {
         
         const testPayload = {
           gameType: 'tag',
-          roomId: roomId || 'tag-1', // Fallback roomId if not set
+          roomId: effectiveRoomId, // Use shared room ID
           taggerId: myId,
           targetId: targetPlayerId
         };

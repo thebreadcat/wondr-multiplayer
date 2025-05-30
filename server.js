@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const ServerSpatialGrid = require('./src/utils/serverSpatialGrid');
+const { setupRaceBuilderSocketHandlers } = require('./src/games/race/server');
 
 // Create express app with simple CORS config
 const app = express();
@@ -86,8 +87,18 @@ const queueCountdowns = {};
 
 // ========== GAME CONFIGS ==========
 const { tagConfig } = require('./src/games/tag/config');
+
+// Race builder config
+const raceBuilderConfig = {
+  minPlayers: 1,
+  maxPlayers: 16,
+  initialCountdown: 3,
+  tagDistance: 1.0,
+};
+
 const gameConfigs = {
   tag: tagConfig,
+  race: raceBuilderConfig,
 };
 
 // Use a different name to avoid conflict with imported getGameConfig
@@ -101,6 +112,8 @@ const localGameConfig = (gameType) => gameConfigs[gameType] || {
 
 // ========== SOCKET HANDLING ==========
 io.on('connection', (socket) => {
+  // Setup race builder socket handlers
+  setupRaceBuilderSocketHandlers(io, socket, activeGames, players);
   socket.joinZones = {};
   console.log('Client connected:', socket.id);
 
@@ -130,6 +143,29 @@ io.on('connection', (socket) => {
       worldGrid.updateEntity(socket.id, data.position);
       
       socket.broadcast.emit('player-moved', { id: socket.id, ...data });
+    }
+  });
+  
+  // Handle player-move event (used for teleportation)
+  socket.on('player-move', (data) => {
+    if (players[socket.id]) {
+      // Log teleport events
+      if (data.isTeleport) {
+        console.log(`[SERVER] 🚀 Teleporting player ${socket.id.substring(0,6)} to [${data.position.join(', ')}]`);
+      }
+      
+      // Update player data
+      players[socket.id].position = data.position;
+      
+      // Update player position in the spatial grid
+      worldGrid.updateEntity(socket.id, data.position);
+      
+      // Broadcast to all other clients
+      socket.broadcast.emit('player-moved', { 
+        id: socket.id, 
+        position: data.position,
+        isTeleport: data.isTeleport
+      });
     }
   });
 
@@ -454,11 +490,14 @@ io.on('connection', (socket) => {
       playersInGameZones[gameType].delete(socket.id);
     });
     Object.entries(activeGames).forEach(([roomId, game]) => {
-      if (game.players.includes(socket.id)) {
+      // Make sure the game object exists and has a players array before accessing it
+      if (game && game.players && Array.isArray(game.players) && game.players.includes(socket.id)) {
         game.players = game.players.filter(id => id !== socket.id);
         if (game.players.length === 0) {
           delete activeGames[roomId];
-          if (currentActiveGame[game.gameType] === roomId) delete currentActiveGame[game.gameType];
+          if (game.gameType && currentActiveGame[game.gameType] === roomId) {
+            delete currentActiveGame[game.gameType];
+          }
         }
       }
     });
@@ -749,6 +788,8 @@ function endGame(io, roomId) {
   }, 10000); // 10 seconds after game end (allowing time for ceremony)
 }
 
+// Start the server right away (no initialization needed)
 server.listen(3006, () => {
   console.log('[SERVER] Listening on port 3006');
+  console.log('[SERVER] Race builder system ready');
 });

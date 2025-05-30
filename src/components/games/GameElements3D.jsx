@@ -6,10 +6,16 @@ import { useMultiplayer } from '../MultiplayerProvider';
 import { GameSystemContext } from '../GameSystemProvider';
 import { gameRegistry } from '../../games/gameRegistry';
 import { getSocket } from '../../utils/socketManager';
+import { Skateboard } from '../../components/Skateboard';
 
 function GameElements3D() {
   const { myId, players } = useMultiplayer();
   const { activeGames, setActiveGames } = useContext(GameSystemContext);
+  
+  // Define skateboard positions in the world - 5 units in front of spawn at [0,0,0]
+  const [skateboards] = useState([
+    { id: 'skateboard1', position: [0, -0.8, -5], rotation: [0, 0, 0], scale: 0.005 }
+  ]);
 
   const [activeGameStates, setActiveGameStates] = useState({});
   const countdownRoomIds = useRef({});
@@ -239,9 +245,27 @@ function GameElements3D() {
     });
   };
 
+  // Function to render skateboards in the world
+  const renderSkateboards = () => {
+    return (
+      <>
+        {skateboards.map(board => (
+          <Skateboard 
+            key={board.id}
+            id={board.id}
+            position={board.position}
+            rotation={board.rotation}
+            scale={board.scale}
+          />
+        ))}
+      </>
+    );
+  };
+  
   return (
     <group>
       {renderJoinZones()}
+      {renderSkateboards()}
     </group>
   );
 }

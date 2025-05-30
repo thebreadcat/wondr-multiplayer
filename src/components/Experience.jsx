@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from "react";
-import { Environment, OrthographicCamera, Html } from "@react-three/drei";
+import { Environment, OrthographicCamera, Html } from "@react-three/drei"; // <Environment /> usage is uncommented below to use local HDRI
+// RaceGame3D is now rendered INSIDE Physics based on showRaceGame/raceRoomId props from App.jsx
 import { Physics } from "@react-three/rapier";
 import { CharacterController } from "./CharacterController";
 import { Map } from "./Map";
@@ -9,6 +10,7 @@ import GameElements3D from "./games/GameElements3D";
 import RemotePlayer from "./RemotePlayer";
 import { GameSystemContext } from "./GameSystemProvider";
 import TagGameRefactored from "../games/tag/TagGameRefactored";
+import { RaceGame3D } from "../games/race";
 
 const maps = {
   castle_on_hills: {
@@ -50,7 +52,22 @@ function RemotePlayersPool() {
   return <>{remotePlayers}</>;
 }
 
-export const Experience = ({ characterColor }) => {
+export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId, showSkateboard }) => {
+  // Use raceRoomId as the shared roomId for all games
+  const sharedRoomId = raceRoomId || "main-room";
+  const isFirstRender = useRef(true);
+  
+  // Only log on first render
+  useEffect(() => {
+    if (isFirstRender.current) {
+      console.log('[Experience] Using shared roomId for all games:', sharedRoomId);
+      isFirstRender.current = false;
+      
+      // Make roomId globally available for other components
+      window.sharedRoomId = sharedRoomId;
+    }
+  }, [sharedRoomId]);
+  
   const { sendEmoji, myId, players } = useMultiplayer();
   const { activeGames } = useContext(GameSystemContext);
   const shadowCameraRef = useRef();
@@ -72,26 +89,6 @@ export const Experience = ({ characterColor }) => {
     return (game.gameType === 'tag' || roomId.startsWith('tag')) && 
            game.state === 'playing';
   });
-  
-  // Debug active tag game detection
-  useEffect(() => {
-    console.log('\n====== GAME STATE DEBUG ======');
-    console.log('🎮 ACTIVE GAMES:', Object.keys(activeGames || {}));
-    console.log('🎮 ACTIVE GAMES FULL:', activeGames);
-    console.log('🎯 ACTIVE TAG GAME:', activeTagGame ? 
-      `${activeTagGame[0]} (Tagged: ${activeTagGame[1].taggedPlayerId?.substring(0, 6)})` : 'none');
-    
-    if (activeTagGame) {
-      console.log('🎮 GAME DETAILS:', {
-        roomId: activeTagGame[0],
-        gameType: activeTagGame[1].gameType,
-        state: activeTagGame[1].state,
-        taggedPlayerId: activeTagGame[1].taggedPlayerId?.substring(0, 6),
-        isCurrentPlayerTagged: activeTagGame[1].taggedPlayerId === myId,
-        playerCount: activeTagGame[1].players?.length || 0
-      });
-    }
-  }, [activeGames, activeTagGame, myId]);
 
   // Reset idle timer whenever position changes
   useEffect(() => {
@@ -161,63 +158,45 @@ export const Experience = ({ characterColor }) => {
       </directionalLight>
       {!idle && (
         <Physics>
-          {/* CRITICAL FIX: Only show tag game if player is actually in it */}
-          {activeTagGame && activeTagGame[1]?.players?.includes(myId) ? (
-            <>
-              {/* TagGame component with position control - only for players in the game */}
-              <TagGameRefactored 
-                gameType="tag"
-                roomId={activeTagGame[0]}
-                setLocalPosition={setLocalPosition}
-              />
-              
-              {/* Map and players */}
-              <Map
-                scale={maps[map].scale}
-                position={maps[map].position}
-                model={`models/${map}.glb`}
-              />
-              
-              {/* Always render local player with CharacterController */}
-              <CharacterController
-                initialPosition={localPosition}
-                characterColor={characterColor}
-                setLocalPosition={setLocalPosition}
-              />
-              
-              {/* Render all remote players from the pool */}
-              <RemotePlayersPool />
-              
-              {/* Render 3D game elements (join zones, etc.) */}
-              <GameElements3D />
-            </>
-          ) : (
-            <>
-              <Map
-                scale={maps[map].scale}
-                position={maps[map].position}
-                model={`models/${map}.glb`}
-              />
-              {/* Always render local player with CharacterController */}
-              <CharacterController
-                initialPosition={localPosition}
-                characterColor={characterColor}
-                setLocalPosition={setLocalPosition}
-              />
-              
-              {/* Spawn position handling is now integrated into TagGameRefactored */}
-              {/* <SpawnPositionHandler
-                setLocalPosition={setLocalPosition}
-              /> */}
-              
-              {/* Render all remote players from the pool */}
-              <RemotePlayersPool />
-              
-              {/* Render 3D game elements (join zones, etc.) */}
-              <GameElements3D />
-            </>
-          )}
-        </Physics>
+        {/* CRITICAL FIX: Only show tag game if player is actually in it */}
+        {activeTagGame && activeTagGame[1]?.players?.includes(myId) ? (
+          <>
+            {/* TagGame component with position control - only for players in the game */}
+            <TagGameRefactored 
+              gameType="tag"
+              roomId={activeTagGame[0] || sharedRoomId}
+              setLocalPosition={setLocalPosition}
+            />
+            {/* Render all remote players from the pool */}
+            <RemotePlayersPool />
+            {/* Render 3D game elements (join zones, etc.) */}
+            <GameElements3D />
+            {/* Race Game 3D Elements - inside Physics! */}
+            {showRaceGame && <RaceGame3D roomId={sharedRoomId} />}
+          </>
+        ) : (
+          <>
+            <Map
+              scale={maps[map].scale}
+              position={maps[map].position}
+              model={`models/${map}.glb`}
+            />
+            {/* Always render local player with CharacterController */}
+            <CharacterController
+              initialPosition={localPosition}
+              characterColor={characterColor}
+              setLocalPosition={setLocalPosition}
+              showSkateboard={showSkateboard}
+            />
+            {/* Render all remote players from the pool */}
+            <RemotePlayersPool />
+            {/* Render 3D game elements (join zones, etc.) */}
+            <GameElements3D />
+            {/* Race Game 3D Elements - inside Physics! */}
+            {showRaceGame && <RaceGame3D roomId={sharedRoomId} />}
+          </>
+        )}
+      </Physics>
       )}
       {idle && (
         <Html fullscreen>
@@ -231,4 +210,4 @@ export const Experience = ({ characterColor }) => {
       )}
     </>
   );
-};
+});
