@@ -30,6 +30,11 @@ const RUN_SPEED = 5;
 const ROTATION_SPEED = 0.1;
 const VERTICAL_OFFSET = -0.18; // Character's vertical offset from the ground
 
+// Camera configuration
+const CAMERA_HEIGHT = 2.5; // Camera height above character
+const CAMERA_DISTANCE = 6; // Camera distance behind character
+const CAMERA_ROTATION_SPEED = 0.05; // Reduced rotation speed for smoother camera movement
+
 const normalizeAngle = (angle) => {
   while (angle > Math.PI) angle -= 2 * Math.PI;
   while (angle < -Math.PI) angle += 2 * Math.PI;
@@ -505,18 +510,15 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     const movementSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
     const isWalking = movementSpeed > 0.1 && movementSpeed < 4;
     const isRunning = movementSpeed >= 4;
-
-    // Adjust camera follow speed based on movement
-    let cameraSpeed = 0.1; // Default camera speed
-    if (isRunning) {
-      cameraSpeed = 0.05; // Slower camera movement when running
-    } else if (isWalking) {
-      cameraSpeed = 0.08; // Medium camera speed when walking
-    }
+    
+    // Use a consistent camera speed regardless of movement
+    // This ensures character stays at consistent distance from bottom of screen
+    const cameraSpeed = 0.1; // Fixed camera speed for all movement types
 
     // Update container rotation (camera orbit point) with delta time for smooth motion
     if (container.current) {
-      const rotationLerpFactor = cameraSpeed * (60 * cappedDelta); // Normalize by target framerate
+      // Use a slower rotation speed for smoother camera movement
+      const rotationLerpFactor = CAMERA_ROTATION_SPEED * (60 * cappedDelta); // Normalize by target framerate
       container.current.rotation.y = MathUtils.lerp(
         container.current.rotation.y,
         rotationTarget.current,
@@ -547,14 +549,41 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
           state.camera.lookAt(cameraLookAt.current);
         }
       } else {
-        // Third person camera - original camera behavior
+        // Third person camera - fixed distance behavior
         if (cameraPosition.current) {
-          cameraPosition.current.getWorldPosition(cameraWorldPosition.current);
+          // Get the current character position
+          const characterPos = new Vector3(position.x, position.y, position.z);
+          
+          // Calculate camera position based on fixed height and distance
+          // This ensures the character stays at a consistent position on screen
+          const cameraOffset = new Vector3();
+          
+          // Calculate camera position behind character based on rotation
+          cameraOffset.x = -Math.sin(container.current.rotation.y) * CAMERA_DISTANCE;
+          cameraOffset.z = -Math.cos(container.current.rotation.y) * CAMERA_DISTANCE;
+          
+          // Set fixed height above character
+          cameraOffset.y = CAMERA_HEIGHT;
+          
+          // Set the camera position target
+          cameraWorldPosition.current.copy(characterPos).add(cameraOffset);
           
           // Smoothly move camera with delta-time interpolation
-          state.camera.position.lerp(cameraWorldPosition.current, positionLerpFactor * 0.5);
-          cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, positionLerpFactor);
+          // Use a consistent lerp factor regardless of movement speed
+          const fixedLerpFactor = 0.1 * (60 * cappedDelta);
+          state.camera.position.lerp(cameraWorldPosition.current, fixedLerpFactor);
+          
+          // Look at a point slightly above the character for better framing
+          const lookTarget = new Vector3(characterPos.x, characterPos.y + 1.0, characterPos.z);
+          cameraLookAt.current.lerp(lookTarget, fixedLerpFactor);
           state.camera.lookAt(cameraLookAt.current);
+          
+          // Debug camera position
+          if (Math.random() < 0.005) {
+            console.log(`[CharacterController] Camera position: ${state.camera.position.x.toFixed(2)}, ${state.camera.position.y.toFixed(2)}, ${state.camera.position.z.toFixed(2)}`);
+            console.log(`[CharacterController] Character position: ${characterPos.x.toFixed(2)}, ${characterPos.y.toFixed(2)}, ${characterPos.z.toFixed(2)}`);
+            console.log(`[CharacterController] Camera distance: ${state.camera.position.distanceTo(characterPos).toFixed(2)}`);
+          }
         }
       }
     }

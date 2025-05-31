@@ -128,11 +128,11 @@ function App() {
         <KeyboardControls map={keyboardMap}>
           <Canvas
             shadows
-            camera={{ position: [3, 3, 3], near: 0.1, fov: 40 }}
+            camera={{ position: [3, 3, 3], near: 0.1, fov: 25 }}
             style={{ touchAction: "none" }}
             {...canvasConfig}
           >
-            <color attach="background" args={["#ececec"]} />
+            <color attach="background" args={["#87CEEB"]} />
             <Experience 
               characterColor={characterColor} 
               showRaceGame={showRaceGame} 
@@ -152,6 +152,41 @@ function App() {
           {/* Race HUD - Shows race timer and other race UI elements */}
           <RaceHUD />
         </KeyboardControls>
+        {/* WondR Logo in top left */}
+        <a 
+          href="https://wondrland.io" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          style={{ 
+            position: 'fixed', 
+            top: 20, 
+            left: 20, 
+            zIndex: 1000, 
+            textDecoration: 'none',
+            fontFamily: '"Montserrat", sans-serif',
+            fontWeight: 'bold',
+            fontSize: '24px',
+            color: 'white',
+            textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            background: 'rgba(0,0,0,0.2)',
+            backdropFilter: 'blur(4px)',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.background = 'rgba(0,0,0,0.3)';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.background = 'rgba(0,0,0,0.2)';
+          }}
+        >
+          WondR
+        </a>
+
+        {/* Phone Menu Button */}
         <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000, display: 'flex', gap: 8 }}>
           <PhoneMenuButton onClick={() => setShowPhoneMenu(true)} />
         </div>
