@@ -1,5 +1,5 @@
 // CharacterController.jsx (refactored with stable animation, jump handling, clean updates)
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Vector3, Euler, MathUtils } from "three";
 import { CapsuleCollider, RigidBody, useRapier } from "@react-three/rapier";
@@ -114,9 +114,62 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
   // Get camera mode from the global store
   const { isFirstPerson } = useCameraStore();
   
+  // First-person mouse look state
+  const [isPointerLocked, setIsPointerLocked] = useState(false);
+  const mouseRotation = useRef({ x: 0, y: 0 });
+  
   // Track previous camera mode to handle transitions
   const previousCameraMode = useRef(false);
   const cameraTransitionTime = useRef(0);
+  
+  // Get Three.js state for canvas access
+  const { gl } = useThree();
+  
+  // Pointer lock controls for first-person mode
+  useEffect(() => {
+    if (!isFirstPerson) return;
+    
+    const canvas = gl.domElement;
+    
+    const handlePointerLockChange = () => {
+      setIsPointerLocked(document.pointerLockElement === canvas);
+    };
+    
+    const handleMouseMove = (event) => {
+      if (document.pointerLockElement === canvas) {
+        // Apply a sensitivity factor to control rotation speed
+        const sensitivity = 0.002;
+        mouseRotation.current.y -= event.movementX * sensitivity;
+        mouseRotation.current.x -= event.movementY * sensitivity;
+        
+        // Clamp vertical rotation to prevent camera flipping
+        mouseRotation.current.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, mouseRotation.current.x));
+      }
+    };
+    
+    const handleClick = () => {
+      if (isFirstPerson && document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock();
+      }
+    };
+    
+    // Add event listeners
+    canvas.addEventListener('click', handleClick);
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
+    document.addEventListener('mousemove', handleMouseMove);
+    
+    // Cleanup function
+    return () => {
+      canvas.removeEventListener('click', handleClick);
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
+      document.removeEventListener('mousemove', handleMouseMove);
+      
+      // Exit pointer lock when component unmounts or first-person mode is disabled
+      if (document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+      }
+    };
+  }, [isFirstPerson, gl]);
 
   const characterRotationTarget = useRef(0);
   const rotationTarget = useRef(0);
@@ -325,11 +378,46 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     
     // Handle movement differently based on camera mode
     if (isFirstPerson) {
-      // First-person movement is relative to camera direction
-      if (forward) movement.z = 1;
-      if (backward) movement.z = -1;
-      if (left) movement.x = 1; // Match third-person controls
-      if (right) movement.x = -1; // Match third-person controls
+      if (isPointerLocked) {
+        // When pointer is locked, movement is relative to where the camera is looking
+        const forwardVector = new Vector3(0, 0, 1);
+        const rightVector = new Vector3(1, 0, 0);
+        
+        // Apply the camera's horizontal rotation to the movement vectors
+        forwardVector.applyAxisAngle(new Vector3(0, 1, 0), mouseRotation.current.y);
+        rightVector.applyAxisAngle(new Vector3(0, 1, 0), mouseRotation.current.y);
+        
+        // Calculate movement based on rotated vectors
+        if (forward) {
+          movement.x += forwardVector.x;
+          movement.z += forwardVector.z;
+        }
+        if (backward) {
+          movement.x -= forwardVector.x;
+          movement.z -= forwardVector.z;
+        }
+        if (left) {
+          movement.x -= rightVector.x;
+          movement.z -= rightVector.z;
+        }
+        if (right) {
+          movement.x += rightVector.x;
+          movement.z += rightVector.z;
+        }
+        
+        // Normalize movement vector if moving diagonally
+        const length = Math.sqrt(movement.x * movement.x + movement.z * movement.z);
+        if (length > 0) {
+          movement.x /= length;
+          movement.z /= length;
+        }
+      } else {
+        // Standard first-person movement when not pointer locked
+        if (forward) movement.z = 1;
+        if (backward) movement.z = -1;
+        if (left) movement.x = 1; // Match third-person controls
+        if (right) movement.x = -1; // Match third-person controls
+      }
     } else {
       // Third-person movement (original behavior)
       if (forward) movement.z = 1;
@@ -543,10 +631,31 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
           // Smoothly move camera to first person position
           state.camera.position.lerp(cameraWorldPosition.current, positionLerpFactor * 0.5);
           
-          // Look in the direction the character is facing
-          const lookDirection = new Vector3(0, 0, 1).applyQuaternion(container.current.quaternion);
-          cameraLookAt.current.copy(state.camera.position).add(lookDirection);
-          state.camera.lookAt(cameraLookAt.current);
+          // Use pointer lock rotation for camera direction if locked
+          if (isPointerLocked) {
+            // Create a base look direction vector
+            const lookDirection = new Vector3(0, 0, 1);
+            
+            // Apply vertical rotation (up/down) from mouse
+            lookDirection.applyAxisAngle(new Vector3(1, 0, 0), mouseRotation.current.x);
+            
+            // Apply horizontal rotation (left/right) from mouse
+            lookDirection.applyAxisAngle(new Vector3(0, 1, 0), mouseRotation.current.y);
+            
+            // Set the camera look target
+            cameraLookAt.current.copy(state.camera.position).add(lookDirection);
+            state.camera.lookAt(cameraLookAt.current);
+            
+            // Update character rotation to match camera horizontal rotation
+            // This makes the character face the same direction as the camera
+            const characterRotation = new Euler(0, mouseRotation.current.y, 0);
+            container.current.setRotationFromEuler(characterRotation);
+          } else {
+            // Default: look in the direction the character is facing
+            const lookDirection = new Vector3(0, 0, 1).applyQuaternion(container.current.quaternion);
+            cameraLookAt.current.copy(state.camera.position).add(lookDirection);
+            state.camera.lookAt(cameraLookAt.current);
+          }
         }
       } else {
         // Third person camera - fixed distance behavior

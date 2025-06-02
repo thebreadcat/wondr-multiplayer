@@ -34,18 +34,21 @@
   background-color: #f8f9fa;
   border-radius: 30px;
   overflow: hidden;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
+  border: 12px solid #8ee88e !important;
+  box-shadow: 8px 8px 0px #4a9e4a !important;
 }
 
+/* Solid border is used instead of gradient */
+
 .phone-header {
-  padding: 15px;
-  background-color: #3498db;
-  color: white;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
+  padding: 15px 20px;
+  background-color: transparent;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .phone-header h2 {
@@ -62,15 +65,20 @@
 }
 
 .phone-content {
+  padding: 15px;
   flex: 1;
-  padding: 20px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .phone-navigation {
   display: flex;
   border-top: 1px solid #ddd;
   background-color: #fff;
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
 }
 
 .nav-button {
@@ -101,6 +109,10 @@
 /* Tab Content Styles */
 .tab-content {
   height: 100%;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .tab-content h2 {
@@ -115,16 +127,23 @@
 .app-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  padding: 10px 0;
+  grid-auto-rows: auto;
+  gap: 15px;
+  padding: 10px;
+  width: 100%;
+  justify-content: center;
 }
 
 .app-icon {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: transform 0.2s ease;
+  width: 100%;
+  text-align: center;
+  padding: 8px 0;
 }
 
 .app-icon:hover {
@@ -132,15 +151,15 @@
 }
 
 .app-icon-circle {
-  width: 60px;
-  height: 60px;
-  border-radius: 15px;
+  width: 55px;
+  height: 55px;
+  border-radius: 14px;
   background-color: #3498db;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
 }
@@ -167,6 +186,10 @@
   font-size: 12px;
   font-weight: 500;
   color: #333;
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin-top: 2px;
 }
 
 /* Games Tab */

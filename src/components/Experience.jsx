@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useContext } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo, useContext } from "react";
+import { isMobile, VirtualJoystick, MobileButtons } from "./MobileControls";
 import { Environment, OrthographicCamera, Html } from "@react-three/drei"; // <Environment /> usage is uncommented below to use local HDRI
 // RaceGame3D is now rendered INSIDE Physics based on showRaceGame/raceRoomId props from App.jsx
 import { Physics } from "@react-three/rapier";
@@ -53,6 +54,7 @@ function RemotePlayersPool() {
 }
 
 export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId, showSkateboard }) => {
+  // Mobile detection moved to App.jsx
   // Use raceRoomId as the shared roomId for all games
   const sharedRoomId = raceRoomId || "main-room";
   const isFirstRender = useRef(true);
@@ -135,6 +137,8 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
     lastActiveTimeRef.current = Date.now();
     setIdle(false);
   };
+  
+  // Mobile control handlers moved to App.jsx
 
   return (
     <>
@@ -208,6 +212,7 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
           </div>
         </Html>
       )}
+      {/* Mobile controls moved to App.jsx to render outside Canvas */}
     </>
   );
 });

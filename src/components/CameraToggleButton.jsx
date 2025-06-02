@@ -21,29 +21,28 @@ export default function CameraToggleButton() {
   };
 
   return (
-    <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 1000 }}>
-      <button
-        onClick={handleToggle}
-        disabled={animating}
-        style={{
-          fontSize: '20px',
-          padding: '10px',
-          borderRadius: '8px',
-          background: '#fff',
-          cursor: animating ? 'not-allowed' : 'pointer',
-          border: '1px solid #888',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'transform 0.2s ease',
-          transform: animating ? 'scale(0.95)' : 'scale(1)',
-        }}
-        aria-label={isFirstPerson ? "Switch to third person view" : "Switch to first person view"}
-        title={isFirstPerson ? "Switch to third person view" : "Switch to first person view"}
-      >
-        {isFirstPerson ? '👁️ 1st Person' : '🎮 3rd Person'}
-      </button>
-    </div>
+    <button
+      onClick={handleToggle}
+      disabled={animating}
+      style={{
+        fontSize: '16px',
+        padding: '8px 12px',
+        borderRadius: '5px',
+        background: '#fff',
+        cursor: animating ? 'not-allowed' : 'pointer',
+        border: '1px solid #888',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'transform 0.2s ease',
+        transform: animating ? 'scale(0.95)' : 'scale(1)',
+        width: 'fit-content',
+      }}
+      aria-label={isFirstPerson ? "Switch to third person view" : "Switch to first person view"}
+      title={isFirstPerson ? "Switch to third person view" : "Switch to first person view"}
+    >
+      {isFirstPerson ? '👁️ 1st' : '🎮 3rd'}
+    </button>
   );
 }

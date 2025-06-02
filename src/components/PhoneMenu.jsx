@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { FaPhone, FaHome, FaGamepad, FaUser, FaCog, FaTimes, FaSnowboarding } from 'react-icons/fa';
+import { FaPhone, FaHome, FaGamepad, FaUser, FaCog, FaTimes, FaSnowboarding, FaVideo, FaEye } from 'react-icons/fa';
+import { useCameraStore } from './CameraToggleButton';
+import './PhoneMenu.css';
 
 // Tab content components
-const HomeTab = ({ onCustomizeClick, onCloseMenu, onToggleSkateboard, showSkateboard }) => (
+const HomeTab = ({ onCustomizeClick, onCloseMenu, onToggleSkateboard, showSkateboard }) => {
+  const { isFirstPerson, toggleView } = useCameraStore();
+  
+  return (
   <div className="tab-content">
     <h2>Apps</h2>
     <div className="app-grid">
@@ -33,7 +38,7 @@ const HomeTab = ({ onCustomizeClick, onCloseMenu, onToggleSkateboard, showSkateb
         <div className={`app-icon-circle ${showSkateboard ? 'active' : ''}`}>
           <FaSnowboarding size={24} />
         </div>
-        <span>Skateboard {showSkateboard ? 'ON' : 'OFF'}</span>
+        <span>Board</span>
       </div>
       <div className="app-icon">
         <div className="app-icon-circle">
@@ -47,9 +52,21 @@ const HomeTab = ({ onCustomizeClick, onCloseMenu, onToggleSkateboard, showSkateb
         </div>
         <span>Home</span>
       </div>
+      <div 
+        className="app-icon"
+        onClick={() => {
+          toggleView();
+        }}
+      >
+        <div className={`app-icon-circle ${isFirstPerson ? 'active' : ''}`}>
+          {isFirstPerson ? <FaEye size={24} /> : <FaVideo size={24} />}
+        </div>
+        <span>{isFirstPerson ? '1st Person' : '3rd Person'}</span>
+      </div>
     </div>
   </div>
-);
+  );
+};
 
 const GamesTab = () => (
   <div className="tab-content">
@@ -186,41 +203,30 @@ const PhoneMenu = ({ isOpen, onClose, onCustomizeClick, onToggleSkateboard, show
         height: '100vh',
         backgroundColor: 'rgba(0,0,0,0.5)',
       }} onClick={onClose}>
-        <div className="phone-menu-container" 
-          style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: '350px',
-            height: '600px',
-            backgroundColor: '#f8f9fa',
-            borderRadius: '30px',
-            overflow: 'hidden',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-            display: 'flex',
-            flexDirection: 'column'
-          }}
+        <div className="phone-menu-container"
           onClick={(e) => e.stopPropagation()}
+          style={{
+            border: '12px solid #8ee88e',
+            boxShadow: '8px 8px 0px #4a9e4a'
+          }}
         >
           {/* Phone Header */}
-          <div className="phone-header" style={{
-            padding: '15px',
-            backgroundColor: '#3498db',
-            color: 'white',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <h2 style={{ margin: 0, fontSize: '18px' }}>Menu</h2>
+          <div className="phone-header">
             <button 
               onClick={onClose}
               style={{
-                background: 'none',
-                border: 'none',
-                color: 'white',
+                background: '#8ee88e',
+                border: '1px solid #4a9e4a',
+                borderRadius: '50%',
+                color: '#333',
                 cursor: 'pointer',
-                fontSize: '20px'
+                fontSize: '18px',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0
               }}
             >
               <FaTimes />
@@ -228,20 +234,12 @@ const PhoneMenu = ({ isOpen, onClose, onCustomizeClick, onToggleSkateboard, show
           </div>
 
           {/* Phone Content */}
-          <div className="phone-content" style={{
-            flex: 1,
-            padding: '20px',
-            overflowY: 'auto'
-          }}>
+          <div className="phone-content">
             {renderTabContent()}
           </div>
 
           {/* Phone Navigation */}
-          <div className="phone-navigation" style={{
-            display: 'flex',
-            borderTop: '1px solid #ddd',
-            backgroundColor: '#fff'
-          }}>
+          <div className="phone-navigation">
             <button 
               className={`nav-button ${activeTab === 'home' ? 'active' : ''}`}
               onClick={() => setActiveTab('home')}

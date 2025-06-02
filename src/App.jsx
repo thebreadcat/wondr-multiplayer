@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { isMobile, VirtualJoystick, MobileButtons } from "./components/MobileControls";
 import { KeyboardControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Experience } from "./components/Experience";
@@ -77,6 +78,31 @@ function App() {
   const [showPhoneMenu, setShowPhoneMenu] = useState(false);
   const [showSkateboard, setShowSkateboard] = useState(false);
   
+  // Mobile controls state
+  const isMobileDevice = useMemo(() => isMobile(), []);
+  const [mobileRunning, setMobileRunning] = useState(false);
+  
+  // Mobile control handlers that connect to the CharacterController component
+  const handleJoystickMove = useCallback((input) => {
+    if (window.mobileControls) {
+      window.mobileControls.handleJoystickMove(input);
+    }
+  }, []);
+
+  const handleJump = useCallback((pressed) => {
+    if (window.mobileControls) {
+      window.mobileControls.handleJump(pressed);
+    }
+  }, []);
+
+  const handleRunToggle = useCallback(() => {
+    if (window.mobileControls) {
+      window.mobileControls.handleRunToggle();
+      // Update local state to trigger re-render
+      setMobileRunning(prev => !prev);
+    }
+  }, []);
+  
   // Race socket handlers are now managed by the RaceSocketListeners component
   
   // Notification system is now handled by the race components directly
@@ -149,6 +175,18 @@ function App() {
           {/* Race Builder UI Components - These must be outside the Canvas */}
           {showRaceBuilder && <RaceBuilderUI />}
           
+          {/* Mobile controls - These must be outside the Canvas */}
+          {isMobileDevice ? (
+            <>
+              <VirtualJoystick onMove={handleJoystickMove} />
+              <MobileButtons 
+                onJump={handleJump} 
+                onRun={handleRunToggle} 
+                isRunning={mobileRunning}
+              />
+            </>
+          ) : null}
+          
           {/* Race HUD - Shows race timer and other race UI elements */}
           <RaceHUD />
         </KeyboardControls>
@@ -187,8 +225,13 @@ function App() {
         </a>
 
         {/* Phone Menu Button */}
-        <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000, display: 'flex', gap: 8 }}>
-          <PhoneMenuButton onClick={() => setShowPhoneMenu(true)} />
+        <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <EmojiButton />
+            <div className="phone-button-container">
+              <PhoneMenuButton onClick={() => setShowPhoneMenu(true)} />
+            </div>
+          </div>
         </div>
         
         {/* Phone Menu */}
@@ -224,10 +267,7 @@ function App() {
           {/* RaceGameUI overlays/listeners outside Canvas */}
           {showRaceGame && <RaceGameUI />}
         </div>
-        <div style={{ position: 'fixed', bottom: 20, left: 20, zIndex: 1000 }}>
-          <EmojiButton />
-        </div>
-        <CameraToggleButton />
+        {/* EmojiButton and CameraToggleButton moved to top right corner */}
         <StatsMonitor />
         {showCreator && (
           <CharacterCreator
