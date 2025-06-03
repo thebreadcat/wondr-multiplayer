@@ -3,20 +3,46 @@ import styled from 'styled-components';
 import { useVoiceChat } from './VoiceChatProvider';
 import { useMultiplayer } from './MultiplayerProvider';
 
-const VoiceChatContainer = styled.div`
+const VoiceChatButton = styled.button`
+  font-size: 16px;
+  padding: 8px 12px;
+  border-radius: 5px;
+  background: ${props => {
+    if (!props.isEnabled) return '#fff';
+    if (props.isMuted) return '#F44336';
+    return '#4CAF50';
+  }};
+  cursor: pointer;
+  border: 1px solid #888;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  min-width: 44px;
+  color: ${props => props.isEnabled ? 'white' : 'black'};
+  transition: all 0.2s ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+`;
+
+const VoiceChatModal = styled.div`
   position: fixed;
-  bottom: 20px;
+  top: 70px;
   right: 20px;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.9);
   border-radius: 12px;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 200px;
+  min-width: 250px;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  z-index: 1000;
+  z-index: 1001;
+  font-family: 'Roboto', sans-serif;
 `;
 
 const VoiceChatHeader = styled.div`
@@ -25,7 +51,8 @@ const VoiceChatHeader = styled.div`
   justify-content: space-between;
   color: white;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
+  font-family: 'Roboto', sans-serif;
 `;
 
 const ControlsRow = styled.div`
@@ -49,6 +76,8 @@ const VoiceButton = styled.button`
   border-radius: 8px;
   padding: 8px 12px;
   font-size: 12px;
+  font-family: 'Roboto', sans-serif;
+  font-weight: 500;
   cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
   transition: all 0.2s ease;
   display: flex;
@@ -95,6 +124,7 @@ const PlayerItem = styled.div`
   background: rgba(255, 255, 255, 0.05);
   color: white;
   font-size: 12px;
+  font-family: 'Roboto', sans-serif;
 `;
 
 const PlayerInfo = styled.div`
@@ -121,28 +151,13 @@ const VoiceActivityIndicator = styled.div`
   }
 `;
 
-const MicrophoneLevel = styled.div`
-  width: 60px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
-  overflow: hidden;
-  position: relative;
-`;
-
-const MicrophoneLevelBar = styled.div`
-  height: 100%;
-  background: linear-gradient(90deg, #4CAF50, #8BC34A, #CDDC39, #FFEB3B, #FF9800, #F44336);
-  width: ${props => Math.min(props.level, 100)}%;
-  transition: width 0.1s ease;
-`;
-
-const ToggleButton = styled.button`
+const CloseButton = styled.button`
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 16px;
+  font-family: 'Roboto', sans-serif;
   padding: 4px;
   
   &:hover {
@@ -150,80 +165,21 @@ const ToggleButton = styled.button`
   }
 `;
 
-const ConnectionIndicator = styled.div`
-  display: flex;
-  gap: 4px;
-  margin-top: 8px;
-
-  .connection-status {
-    padding: 4px 8px;
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
-    font-size: 10px;
-    color: white;
-  }
-
-  .connected {
-    background-color: #4CAF50;
-  }
-
-  .connecting {
-    background-color: #FF9800;
-  }
-
-  .error {
-    background-color: #F44336;
-  }
-
-  .retrying {
-    background-color: #ff9800;
-  }
-`;
-
-const VoiceChatButtons = styled.div`
-  display: flex;
-  gap: 8px;
-`;
-
-const VoiceChatButton = styled.button`
-  background: ${props => {
-    if (props.disabled) return 'rgba(128, 128, 128, 0.3)';
-    if (props.active) return props.activeColor || '#4CAF50';
-    return 'rgba(255, 255, 255, 0.1)';
-  }};
-  border: 1px solid ${props => {
-    if (props.disabled) return 'rgba(128, 128, 128, 0.3)';
-    if (props.active) return props.activeColor || '#4CAF50';
-    return 'rgba(255, 255, 255, 0.2)';
-  }};
-  color: ${props => props.disabled ? 'rgba(255, 255, 255, 0.4)' : 'white'};
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 12px;
-  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+const RetryButton = styled.button`
+  background: rgba(255, 152, 0, 0.2);
+  border: 1px solid rgba(255, 152, 0, 0.4);
+  color: #FF9800;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-family: 'Roboto', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
   transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-
+  
   &:hover {
-    background: ${props => {
-      if (props.disabled) return 'rgba(128, 128, 128, 0.3)';
-      if (props.active) return props.activeColor || '#4CAF50';
-      return 'rgba(255, 255, 255, 0.2)';
-    }};
-  }
-
-  &.muted {
-    background-color: rgba(255, 255, 255, 0.1);
-  }
-
-  &.deafened {
-    background-color: rgba(255, 255, 255, 0.1);
-  }
-
-  &.retry {
-    background-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 152, 0, 0.3);
+    border-color: rgba(255, 152, 0, 0.6);
   }
 `;
 
@@ -234,18 +190,15 @@ export default function VoiceChatControls() {
     isDeafened,
     voiceActivity,
     connectionStatus,
-    microphoneVolume,
     startVoiceChat,
     stopVoiceChat,
     toggleMute,
     toggleDeafen,
-    enableAudio,
-    testAudio,
     retryAllConnections
   } = useVoiceChat();
 
   const { players, myId } = useMultiplayer();
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [showModal, setShowModal] = useState(false);
 
   const connectedPlayers = Object.keys(players).filter(id => 
     id !== myId && connectionStatus[id] === 'connected'
@@ -264,222 +217,116 @@ export default function VoiceChatControls() {
   const handleStopVoiceChat = () => {
     console.log('[VoiceChatControls] Stopping voice chat...');
     stopVoiceChat();
+    setShowModal(false);
   };
 
-  // Debug function to show connection status
-  const debugConnections = () => {
-    console.log('=== VOICE CHAT DEBUG ===');
-    console.log('My ID:', myId);
-    console.log('Voice chat enabled:', isVoiceChatEnabled);
-    console.log('Players:', Object.keys(players));
-    console.log('Connection status:', connectionStatus);
-    console.log('Socket connected:', window.gameSocket?.connected || window.socket?.connected);
-    console.log('========================');
+  const handleButtonClick = (e) => {
+    // Remove focus to prevent spacebar from toggling the button
+    e.currentTarget.blur();
+    
+    if (!isVoiceChatEnabled) {
+      handleStartVoiceChat();
+    } else {
+      setShowModal(!showModal);
+    }
   };
-
-  // Count connected players
-  const connectedCount = Object.values(connectionStatus).filter(status => status === 'connected').length;
-  const totalOtherPlayers = Object.keys(players).filter(id => id !== myId).length;
 
   // Check if there are any stuck connections
   const hasStuckConnections = Object.values(connectionStatus).some(
     status => status === 'connecting' || status === 'error' || status === 'retrying'
   );
 
-  if (!isVoiceChatEnabled) {
-    return (
-      <VoiceChatContainer>
-        <VoiceChatHeader>
-          Voice Chat
-        </VoiceChatHeader>
-        <VoiceButton onClick={handleStartVoiceChat}>
-          🎤 Join Voice Chat
-        </VoiceButton>
-      </VoiceChatContainer>
-    );
-  }
-
   return (
-    <VoiceChatContainer>
-      <VoiceChatHeader>
-        Voice Chat ({connectedPlayers.length} connected)
-        <ToggleButton onClick={() => setIsExpanded(!isExpanded)}>
-          {isExpanded ? '▼' : '▲'}
-        </ToggleButton>
-      </VoiceChatHeader>
+    <>
+      <VoiceChatButton
+        onClick={handleButtonClick}
+        isEnabled={isVoiceChatEnabled}
+        isMuted={isMuted}
+        title={isVoiceChatEnabled ? (isMuted ? 'Unmute microphone' : 'Voice chat active') : 'Start voice chat'}
+      >
+        {!isVoiceChatEnabled ? '🎤' : (isMuted ? '🔇' : '🎤')}
+      </VoiceChatButton>
 
-      <ControlsRow>
-        <VoiceButton
-          active={!isMuted}
-          activeColor="#4CAF50"
-          onClick={toggleMute}
-        >
-          {isMuted ? '🔇' : '🎤'} {isMuted ? 'Unmute' : 'Mute'}
-        </VoiceButton>
+      {showModal && isVoiceChatEnabled && (
+        <VoiceChatModal>
+          <VoiceChatHeader>
+            Voice Chat ({connectedPlayers.length} connected)
+            <CloseButton onClick={() => setShowModal(false)}>
+              ✕
+            </CloseButton>
+          </VoiceChatHeader>
 
-        <VoiceButton
-          active={!isDeafened}
-          activeColor="#2196F3"
-          onClick={toggleDeafen}
-        >
-          {isDeafened ? '🔇' : '🔊'} {isDeafened ? 'Undeafen' : 'Deafen'}
-        </VoiceButton>
+          <ControlsRow>
+            <VoiceButton
+              active={!isMuted}
+              activeColor="#4CAF50"
+              onClick={toggleMute}
+            >
+              {isMuted ? '🔇' : '🎤'} {isMuted ? 'Unmute' : 'Mute'}
+            </VoiceButton>
 
-        <VoiceButton
-          onClick={handleStopVoiceChat}
-          activeColor="#F44336"
-        >
-          ❌ Leave
-        </VoiceButton>
-      </ControlsRow>
+            <VoiceButton
+              active={!isDeafened}
+              activeColor="#2196F3"
+              onClick={toggleDeafen}
+            >
+              {isDeafened ? '🔇' : '🔊'} {isDeafened ? 'Undeafen' : 'Deafen'}
+            </VoiceButton>
 
-      {!isMuted && (
-        <div>
-          <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '10px', marginBottom: '4px' }}>
-            Microphone Level
-          </div>
-          <MicrophoneLevel>
-            <MicrophoneLevelBar level={(microphoneVolume / 255) * 100} />
-          </MicrophoneLevel>
-        </div>
-      )}
+            <VoiceButton
+              onClick={handleStopVoiceChat}
+              activeColor="#F44336"
+            >
+              ❌ Leave
+            </VoiceButton>
+          </ControlsRow>
 
-      {isExpanded && (
-        <PlayersList>
-          {/* Show my own status */}
-          <PlayerItem>
-            <PlayerInfo>
-              <VoiceActivityIndicator active={voiceActivity[myId]} />
-              <span>You {isMuted ? '(muted)' : ''}</span>
-            </PlayerInfo>
-            <StatusIndicator status="connected" />
-          </PlayerItem>
-
-          {/* Show other players */}
-          {Object.keys(players).map(playerId => {
-            if (playerId === myId) return null;
-            
-            const player = players[playerId];
-            const status = connectionStatus[playerId] || 'disconnected';
-            const isActive = voiceActivity[playerId];
-            
-            return (
-              <PlayerItem key={playerId}>
-                <PlayerInfo>
-                  <VoiceActivityIndicator active={isActive} />
-                  <span>
-                    Player {playerId.substring(0, 6)}
-                    {status === 'connecting' && ' (connecting...)'}
-                    {status === 'error' && ' (error)'}
-                  </span>
-                </PlayerInfo>
-                <StatusIndicator status={status} />
-              </PlayerItem>
-            );
-          })}
-
-          {Object.keys(players).length === 1 && (
-            <PlayerItem>
-              <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>
-                No other players online
-              </span>
-            </PlayerItem>
+          {hasStuckConnections && (
+            <RetryButton onClick={retryAllConnections}>
+              🔄 Retry Connections
+            </RetryButton>
           )}
-        </PlayersList>
-      )}
 
-      {/* Connection Status */}
-      <div style={{ fontSize: '12px', opacity: 0.8 }}>
-        Status: {isVoiceChatEnabled ? 'Connected' : 'Disconnected'}
-        <br />
-        Connections: {connectedCount}/{totalOtherPlayers}
-      </div>
+          <PlayersList>
+            {/* Show my own status */}
+            <PlayerItem>
+              <PlayerInfo>
+                <VoiceActivityIndicator active={voiceActivity[myId]} />
+                <span>You {isMuted ? '(muted)' : ''}</span>
+              </PlayerInfo>
+              <StatusIndicator status="connected" />
+            </PlayerItem>
 
-      {/* Debug and Retry Buttons */}
-      <div style={{ display: 'flex', gap: '5px' }}>
-        <button 
-          onClick={debugConnections}
-          style={{
-            padding: '4px 8px',
-            backgroundColor: '#666',
-            color: 'white',
-            border: 'none',
-            borderRadius: '3px',
-            cursor: 'pointer',
-            fontSize: '10px',
-            flex: 1
-          }}
-        >
-          Debug Info
-        </button>
-        
-        <button 
-          onClick={retryAllConnections}
-          style={{
-            padding: '4px 8px',
-            backgroundColor: '#ff9800',
-            color: 'white',
-            border: 'none',
-            borderRadius: '3px',
-            cursor: 'pointer',
-            fontSize: '10px',
-            flex: 1
-          }}
-        >
-          Retry Connections
-        </button>
-      </div>
-      
-      {/* Audio Test Buttons */}
-      {isVoiceChatEnabled && (
-        <div style={{ display: 'flex', gap: '5px' }}>
-          <button 
-            onClick={testAudio}
-            style={{
-              padding: '4px 8px',
-              backgroundColor: '#795548',
-              color: 'white',
-              border: 'none',
-              borderRadius: '3px',
-              cursor: 'pointer',
-              fontSize: '10px',
-              flex: 1
-            }}
-          >
-            Test Audio
-          </button>
-          
-          <button 
-            onClick={enableAudio}
-            style={{
-              padding: '4px 8px',
-              backgroundColor: '#009688',
-              color: 'white',
-              border: 'none',
-              borderRadius: '3px',
-              cursor: 'pointer',
-              fontSize: '10px',
-              flex: 1
-            }}
-          >
-            Enable Audio
-          </button>
-        </div>
+            {/* Show other players */}
+            {Object.keys(players).map(playerId => {
+              if (playerId === myId) return null;
+              
+              const status = connectionStatus[playerId] || 'disconnected';
+              const isActive = voiceActivity[playerId];
+              
+              return (
+                <PlayerItem key={playerId}>
+                  <PlayerInfo>
+                    <VoiceActivityIndicator active={isActive} />
+                    <span>
+                      Player {playerId.substring(0, 6)}
+                    </span>
+                  </PlayerInfo>
+                  <StatusIndicator status={status} />
+                </PlayerItem>
+              );
+            })}
+
+            {Object.keys(players).length === 1 && (
+              <PlayerItem>
+                <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Roboto, sans-serif' }}>
+                  No other players online
+                </span>
+              </PlayerItem>
+            )}
+          </PlayersList>
+        </VoiceChatModal>
       )}
-      
-      {/* Connection Details */}
-      {isVoiceChatEnabled && Object.keys(connectionStatus).length > 0 && (
-        <div style={{ fontSize: '10px', opacity: 0.7 }}>
-          <div>Connections:</div>
-          <ConnectionIndicator>
-            {Object.entries(connectionStatus).map(([playerId, status]) => (
-              <div key={playerId} className={`connection-status ${status}`}>
-                {playerId.substring(0, 6)}: {status}
-              </div>
-            ))}
-          </ConnectionIndicator>
-        </div>
-      )}
-    </VoiceChatContainer>
+    </>
   );
 } 

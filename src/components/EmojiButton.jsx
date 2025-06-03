@@ -8,7 +8,9 @@ export default function EmojiButton() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [cooldown, setCooldown] = useState(false);
 
-  const handleButtonClick = () => {
+  const handleButtonClick = (e) => {
+    // Remove focus to prevent spacebar from toggling the button
+    e.currentTarget.blur();
     if (!cooldown) setMenuOpen(open => !open);
   };
 
@@ -25,12 +27,18 @@ export default function EmojiButton() {
         onClick={handleButtonClick}
         disabled={cooldown}
         style={{
-          fontSize: '24px',
-          padding: '10px',
-          borderRadius: '8px',
+          fontSize: '16px',
+          padding: '8px 12px',
+          borderRadius: '5px',
           background: cooldown ? '#ccc' : '#fff',
           cursor: cooldown ? 'not-allowed' : 'pointer',
           border: '1px solid #888',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '36px',
+          minWidth: '44px',
         }}
         aria-label="Open emoji menu"
       >
@@ -39,12 +47,16 @@ export default function EmojiButton() {
       {menuOpen && (
         <div
           style={{
-            display: 'flex',
+            position: 'absolute',
+            top: '100%',
+            right: '0',
             marginTop: '8px',
+            display: 'flex',
             background: '#fff',
             padding: '8px',
             boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
             borderRadius: '8px',
+            zIndex: 1001,
           }}
         >
           {EMOJI_OPTIONS.map(e => (
@@ -52,12 +64,13 @@ export default function EmojiButton() {
               key={e}
               onClick={() => handleSelect(e)}
               style={{
-                fontSize: '24px',
-                margin: '4px',
+                fontSize: '20px',
+                margin: '2px',
                 padding: '4px',
                 border: 'none',
                 background: 'transparent',
                 cursor: 'pointer',
+                borderRadius: '4px',
               }}
               aria-label={`Send emoji ${e}`}
             >

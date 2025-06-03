@@ -12,7 +12,9 @@ export default function CameraToggleButton() {
   const { isFirstPerson, toggleView } = useCameraStore();
   const [animating, setAnimating] = useState(false);
 
-  const handleToggle = () => {
+  const handleToggle = (e) => {
+    // Remove focus to prevent spacebar from toggling the button
+    e.currentTarget.blur();
     setAnimating(true);
     toggleView();
     
@@ -37,7 +39,8 @@ export default function CameraToggleButton() {
         justifyContent: 'center',
         transition: 'transform 0.2s ease',
         transform: animating ? 'scale(0.95)' : 'scale(1)',
-        width: 'fit-content',
+        height: '36px',
+        minWidth: '70px',
       }}
       aria-label={isFirstPerson ? "Switch to third person view" : "Switch to first person view"}
       title={isFirstPerson ? "Switch to third person view" : "Switch to first person view"}

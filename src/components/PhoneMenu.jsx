@@ -132,7 +132,8 @@ export const PhoneMenuButton = ({ onClick }) => (
   <button
     onClick={onClick}
     style={{
-      padding: '10px 12px',
+      fontSize: '16px',
+      padding: '8px 12px',
       backgroundColor: '#3498db',
       color: 'white',
       border: 'none',
@@ -140,10 +141,13 @@ export const PhoneMenuButton = ({ onClick }) => (
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center'
+      justifyContent: 'center',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+      height: '36px',
+      minWidth: '44px',
     }}
   >
-    <FaPhone size={18} />
+    <FaPhone size={16} />
   </button>
 );
 

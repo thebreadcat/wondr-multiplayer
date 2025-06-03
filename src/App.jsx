@@ -214,16 +214,27 @@ function App() {
           </a>
           
           {/* Top right controls */}
-          <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000, display: 'flex', gap: 8, alignItems: 'center' }}>
-            <EmojiButton 
-              showOverlay={showEmojiOverlay} 
-              setShowOverlay={setShowEmojiOverlay} 
-            />
+          <div style={{ 
+            position: 'fixed', 
+            top: 20, 
+            right: 20, 
+            zIndex: 1000, 
+            display: 'flex', 
+            gap: 8, 
+            alignItems: 'center',
+          }}>
+            <div style={{ position: 'relative' }}>
+              <EmojiButton 
+                showOverlay={showEmojiOverlay} 
+                setShowOverlay={setShowEmojiOverlay} 
+              />
+            </div>
             <CameraToggleButton 
               showThirdPerson={showThirdPerson} 
               setShowThirdPerson={setShowThirdPerson} 
             />
-            <PhoneMenuButton onClick={() => setShowPhoneMenu(true)} />
+            <PhoneMenuButton onClick={(e) => { e.currentTarget.blur(); setShowPhoneMenu(true); }} />
+            <VoiceChatControls />
           </div>
           
           {/* Phone Menu */}
@@ -236,10 +247,12 @@ function App() {
               showSkateboard={showSkateboard}
             />
           )}
-          <div style={{ position: 'fixed', top: 20, right: 160, zIndex: 1000, display: 'flex', gap: 8 }}>
+          
+          {/* Race Game button - positioned separately to avoid overlap */}
+          <div style={{ position: 'fixed', top: 70, right: 20, zIndex: 1000 }}>
             <button
               style={{
-                padding: '10px 16px',
+                padding: '8px 12px',
                 backgroundColor: showRaceGame ? '#e67e22' : '#2980b9',
                 color: 'white',
                 border: 'none',
@@ -247,7 +260,8 @@ function App() {
                 cursor: 'pointer',
                 fontWeight: 'bold',
                 fontSize: '14px',
-                marginLeft: 8
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                height: '36px',
               }}
               onClick={(e) => {
                 setShowRaceGame((v) => !v);
@@ -259,7 +273,6 @@ function App() {
             {/* RaceGameUI overlays/listeners outside Canvas */}
             {showRaceGame && <RaceGameUI />}
           </div>
-          {/* EmojiButton and CameraToggleButton moved to top right corner */}
           <StatsMonitor />
           {showCreator && (
             <CharacterCreator
@@ -268,9 +281,6 @@ function App() {
               onCancel={handleCancel}
             />
           )}
-          
-          {/* Voice Chat Controls */}
-          <VoiceChatControls />
         </GameSystemProvider>
       </VoiceChatProvider>
     </MultiplayerProvider>
