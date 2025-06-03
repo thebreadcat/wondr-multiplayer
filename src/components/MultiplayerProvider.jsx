@@ -133,9 +133,52 @@ export function MultiplayerProvider({ characterColor, position, children }) {
   }, []);
 
   useEffect(() => {
-    // Create a direct socket connection similar to our test script
-    console.log('[MultiplayerProvider] Creating direct socket connection');
-    const socket = io('http://localhost:3006', { transports: ['polling'] });
+    // Create a socket connection that works in both development and production
+    // Priority: 1. VITE_SERVER_URL env var, 2. Development localhost, 3. Production fallback
+    let serverUrl;
+    
+    // Check if we're on a deployed domain (not localhost)
+    const isDeployed = window.location.hostname !== 'localhost' && 
+                      window.location.hostname !== '127.0.0.1' && 
+                      !window.location.hostname.includes('localhost');
+    
+    // Manual override for testing - check URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const forceServer = urlParams.get('server');
+    
+    if (forceServer) {
+      serverUrl = forceServer;
+      console.log('[MultiplayerProvider] Using forced server from URL param:', serverUrl);
+    } else if (import.meta.env.VITE_SERVER_URL) {
+      serverUrl = import.meta.env.VITE_SERVER_URL;
+      console.log('[MultiplayerProvider] Using VITE_SERVER_URL:', serverUrl);
+    } else if (!isDeployed && import.meta.env.DEV) {
+      // Only use localhost if we're actually running on localhost in dev mode
+      serverUrl = 'http://localhost:3006';
+      console.log('[MultiplayerProvider] Development mode on localhost, using localhost:', serverUrl);
+    } else {
+      // For any deployed environment, always use the live server
+      serverUrl = 'https://thefishnfts.com';
+      console.log('[MultiplayerProvider] Deployed environment detected, using live server:', serverUrl);
+    }
+    
+    console.log('[MultiplayerProvider] Environment info:', {
+      VITE_SERVER_URL: import.meta.env.VITE_SERVER_URL,
+      DEV: import.meta.env.DEV,
+      MODE: import.meta.env.MODE,
+      hostname: window.location.hostname,
+      isDeployed: isDeployed,
+      forceServer: forceServer,
+      finalServerUrl: serverUrl
+    });
+    
+    console.log('[MultiplayerProvider] Connecting to server:', serverUrl);
+    const socket = io(serverUrl, { 
+      transports: ['polling', 'websocket'],
+      timeout: 20000,
+      forceNew: true,
+      withCredentials: false
+    });
     
     // Store references
     socketRef.current = socket;
@@ -144,11 +187,31 @@ export function MultiplayerProvider({ characterColor, position, children }) {
     
     // Log connection status
     socket.on('connect', () => {
-      console.log('[MultiplayerProvider] Connected with ID:', socket.id);
+      console.log('[MultiplayerProvider] ✅ Connected successfully with ID:', socket.id);
+      console.log('[MultiplayerProvider] Connected to:', serverUrl);
     });
     
     socket.on('connect_error', (err) => {
-      console.error('[MultiplayerProvider] Connection error:', err);
+      console.error('[MultiplayerProvider] ❌ Connection error:', err);
+      console.error('[MultiplayerProvider] Failed to connect to:', serverUrl);
+      console.error('[MultiplayerProvider] Error details:', {
+        message: err.message,
+        description: err.description,
+        context: err.context,
+        type: err.type
+      });
+    });
+    
+    socket.on('disconnect', (reason) => {
+      console.log('[MultiplayerProvider] 🔌 Disconnected:', reason);
+    });
+    
+    socket.on('reconnect', (attemptNumber) => {
+      console.log('[MultiplayerProvider] 🔄 Reconnected after', attemptNumber, 'attempts');
+    });
+    
+    socket.on('reconnect_error', (err) => {
+      console.error('[MultiplayerProvider] 🔄❌ Reconnection error:', err);
     });
     
     // Setup periodic resync to ensure all clients stay in sync

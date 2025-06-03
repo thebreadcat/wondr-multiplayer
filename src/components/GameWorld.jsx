@@ -2,7 +2,6 @@ import React from 'react';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import BlobRenderer from './BlobRenderer';
-import CustomizeButton from './CustomizeButton';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
 export default function GameWorld({ playerData, onCustomize }) {
@@ -254,7 +253,6 @@ export default function GameWorld({ playerData, onCustomize }) {
   return (
     <>
       <div ref={mountRef} />
-      <CustomizeButton onClick={onCustomize} />
     </>
   );
 }

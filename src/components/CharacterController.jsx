@@ -10,6 +10,7 @@ import { useMultiplayer } from "./MultiplayerProvider";
 import { useGameSystem } from "./GameSystemProvider";
 import styles from "./RemotePlayer.module.css";
 import TagPlayerIndicator from "../games/tag/TagPlayerIndicator";
+import VoiceActivityIndicator from "./VoiceActivityIndicator";
 import { handleGameCollision } from "../utils/handleGameCollision";
 import { useCameraStore } from "./CameraToggleButton";
 
@@ -175,7 +176,6 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
   const rotationTarget = useRef(0);
   const lastPosition = useRef([0, 0, 0]);
   const wasJumpPressed = useRef(false);
-  const isClicking = useRef(false);
   const jumpCooldown = useRef(0);
   const jumpInProgress = useRef(false);
 
@@ -206,23 +206,8 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
   }, []);
 
   useEffect(() => {
-    // Use passive event listeners for improved performance
-    const onMouseDown = () => { isClicking.current = true; };
-    const onMouseUp = () => { isClicking.current = false; };
-    
-    // Add passive flag to indicate these listeners don't call preventDefault()
-    document.addEventListener("mousedown", onMouseDown, { passive: true });
-    document.addEventListener("mouseup", onMouseUp, { passive: true });
-    document.addEventListener("touchstart", onMouseDown, { passive: true });
-    document.addEventListener("touchend", onMouseUp, { passive: true });
-    
     // Clean up all event listeners and resources when component unmounts
     return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("mouseup", onMouseUp);
-      document.removeEventListener("touchstart", onMouseDown);
-      document.removeEventListener("touchend", onMouseUp);
-      
       // Clean up Three.js resources to prevent memory leaks
       if (cameraWorldPosition.current) cameraWorldPosition.current = null;
       if (cameraLookAtWorldPosition.current) cameraLookAtWorldPosition.current = null;
@@ -427,12 +412,6 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     }
 
     let speed = run ? RUN_SPEED : WALK_SPEED;
-
-    if (isClicking.current) {
-      if (Math.abs(state.mouse.x) > 0.1) movement.x = -state.mouse.x;
-      movement.z = state.mouse.y + 0.4;
-      if (Math.abs(movement.x) > 0.5 || Math.abs(movement.z) > 0.5) speed = RUN_SPEED;
-    }
 
     if (movement.x !== 0) rotationTarget.current += ROTATION_SPEED * movement.x;
 
@@ -947,6 +926,9 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
                 </Html>
               )}
               <TagPlayerIndicator playerId={myId} />
+              
+              {/* Voice activity indicator for local player */}
+              <VoiceActivityIndicator playerId={myId} position={currentPosition.current} />
             </group>
           </>
         )}

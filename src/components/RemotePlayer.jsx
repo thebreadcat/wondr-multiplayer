@@ -8,6 +8,7 @@ import { Vector3, MathUtils } from 'three';
 import styles from './RemotePlayer.module.css';
 import { RigidBody } from '@react-three/rapier';
 import TagPlayerIndicator from '../games/tag/TagPlayerIndicator';
+import VoiceActivityIndicator from './VoiceActivityIndicator';
 
 export default function RemotePlayer({ player }) {
   // Always ensure animation is set to idle as fallback
@@ -104,6 +105,9 @@ export default function RemotePlayer({ player }) {
       
       {/* Tag game indicator - red for IT, blue for players */}
       <TagPlayerIndicator playerId={id} />
+      
+      {/* Voice activity indicator */}
+      <VoiceActivityIndicator playerId={id} position={currentPosition} />
     </RigidBody>
   );
 } 

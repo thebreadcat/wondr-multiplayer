@@ -3,15 +3,17 @@ import { isMobile, VirtualJoystick, MobileButtons } from "./components/MobileCon
 import { KeyboardControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Experience } from "./components/Experience";
-import CustomizeButton from './components/CustomizeButton';
 import CharacterCreator from './components/CharacterCreator';
 import EmojiButton from "./components/EmojiButton";
 import CameraToggleButton from "./components/CameraToggleButton";
 import { MultiplayerProvider } from './components/MultiplayerProvider';
+import { VoiceChatProvider } from './components/VoiceChatProvider';
+import VoiceChatControls from './components/VoiceChatControls';
 import { GameSystemProvider } from './components/GameSystemProvider';
 import { PlayerList } from './components/PlayerList';
 import { StatsMonitor } from './components/StatsMonitor';
 import { RaceGame3D, RaceGameUI } from './games/race';
+import RaceBuilderUI from './games/race/components/RaceBuilderUI';
 import RaceHUD from './games/race/RaceHUD';
 import TagGameOverlay from './games/tag/TagGameOverlay';
 import PhoneMenu, { PhoneMenuButton } from './components/PhoneMenu';
@@ -150,133 +152,127 @@ function App() {
 
   return (
     <MultiplayerProvider characterColor={characterColor} position={[0, 2, 0]}>
-      <GameSystemProvider>
-        <KeyboardControls map={keyboardMap}>
-          <Canvas
-            shadows
-            camera={{ position: [3, 3, 3], near: 0.1, fov: 25 }}
-            style={{ touchAction: "none" }}
-            {...canvasConfig}
+      <VoiceChatProvider>
+        <GameSystemProvider>
+          <KeyboardControls map={keyboardMap}>
+            <Canvas
+              shadows
+              camera={{ position: [3, 3, 3], near: 0.1, fov: 25 }}
+              style={{ touchAction: "none" }}
+              {...canvasConfig}
+            >
+              <color attach="background" args={["#87CEEB"]} />
+              <Experience 
+                characterColor={characterColor} 
+                showRaceGame={showRaceGame} 
+                raceRoomId={raceRoomId} 
+                showSkateboard={showSkateboard}
+              />
+              
+              {/* Race Builder 3D Elements */}
+              {showRaceBuilder && <RaceGame3D roomId={raceRoomId} />}
+              
+              {/* Race Game 3D Elements are now rendered inside Experience (inside Physics) */}
+            </Canvas>
+            
+            {/* Race Builder UI Components - These must be outside the Canvas */}
+            {showRaceBuilder && <RaceBuilderUI />}
+            
+            {/* Mobile controls - These must be outside the Canvas */}
+            {isMobileDevice ? (
+              <>
+                <VirtualJoystick onMove={handleJoystickMove} />
+                <MobileButtons 
+                  onJump={handleJump} 
+                  onRun={handleRunToggle} 
+                  isRunning={mobileRunning}
+                />
+              </>
+            ) : null}
+            
+            {/* Race HUD - Shows race timer and other race UI elements */}
+            <RaceHUD />
+          </KeyboardControls>
+          {/* WondR Logo in top left */}
+          <a 
+            href="https://wondrland.io" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            style={{ 
+              position: 'fixed', 
+              top: 20, 
+              left: 20, 
+              zIndex: 1000,
+              color: 'white',
+              textDecoration: 'none',
+              fontWeight: 'bold',
+              fontSize: '18px',
+              textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
+            }}
           >
-            <color attach="background" args={["#87CEEB"]} />
-            <Experience 
-              characterColor={characterColor} 
-              showRaceGame={showRaceGame} 
-              raceRoomId={raceRoomId} 
+            WondR
+          </a>
+          
+          {/* Top right controls */}
+          <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000, display: 'flex', gap: 8, alignItems: 'center' }}>
+            <EmojiButton 
+              showOverlay={showEmojiOverlay} 
+              setShowOverlay={setShowEmojiOverlay} 
+            />
+            <CameraToggleButton 
+              showThirdPerson={showThirdPerson} 
+              setShowThirdPerson={setShowThirdPerson} 
+            />
+            <PhoneMenuButton onClick={() => setShowPhoneMenu(true)} />
+          </div>
+          
+          {/* Phone Menu */}
+          {showPhoneMenu && (
+            <PhoneMenu 
+              isOpen={showPhoneMenu} 
+              onClose={() => setShowPhoneMenu(false)} 
+              onCustomizeClick={() => setShowCreator(true)}
+              onToggleSkateboard={() => setShowSkateboard(prev => !prev)}
               showSkateboard={showSkateboard}
             />
-            
-            {/* Race Builder 3D Elements */}
-            {showRaceBuilder && <RaceGame3D roomId={raceRoomId} />}
-            
-            {/* Race Game 3D Elements are now rendered inside Experience (inside Physics) */}
-          </Canvas>
-          
-          {/* Race Builder UI Components - These must be outside the Canvas */}
-          {showRaceBuilder && <RaceBuilderUI />}
-          
-          {/* Mobile controls - These must be outside the Canvas */}
-          {isMobileDevice ? (
-            <>
-              <VirtualJoystick onMove={handleJoystickMove} />
-              <MobileButtons 
-                onJump={handleJump} 
-                onRun={handleRunToggle} 
-                isRunning={mobileRunning}
-              />
-            </>
-          ) : null}
-          
-          {/* Race HUD - Shows race timer and other race UI elements */}
-          <RaceHUD />
-        </KeyboardControls>
-        {/* WondR Logo in top left */}
-        <a 
-          href="https://wondrland.io" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          style={{ 
-            position: 'fixed', 
-            top: 20, 
-            left: 20, 
-            zIndex: 1000, 
-            textDecoration: 'none',
-            fontFamily: '"Montserrat", sans-serif',
-            fontWeight: 'bold',
-            fontSize: '24px',
-            color: 'white',
-            textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            background: 'rgba(0,0,0,0.2)',
-            backdropFilter: 'blur(4px)',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.transform = 'scale(1.05)';
-            e.currentTarget.style.background = 'rgba(0,0,0,0.3)';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.background = 'rgba(0,0,0,0.2)';
-          }}
-        >
-          WondR
-        </a>
-
-        {/* Phone Menu Button */}
-        <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <EmojiButton />
-            <div className="phone-button-container">
-              <PhoneMenuButton onClick={() => setShowPhoneMenu(true)} />
-            </div>
+          )}
+          <div style={{ position: 'fixed', top: 20, right: 160, zIndex: 1000, display: 'flex', gap: 8 }}>
+            <button
+              style={{
+                padding: '10px 16px',
+                backgroundColor: showRaceGame ? '#e67e22' : '#2980b9',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '14px',
+                marginLeft: 8
+              }}
+              onClick={(e) => {
+                setShowRaceGame((v) => !v);
+                e.currentTarget.blur(); // Remove focus after clicking to prevent spacebar toggling
+              }}
+            >
+              {showRaceGame ? 'Close Race Game' : 'Race Game'}
+            </button>
+            {/* RaceGameUI overlays/listeners outside Canvas */}
+            {showRaceGame && <RaceGameUI />}
           </div>
-        </div>
-        
-        {/* Phone Menu */}
-        {showPhoneMenu && (
-          <PhoneMenu 
-            isOpen={showPhoneMenu} 
-            onClose={() => setShowPhoneMenu(false)} 
-            onCustomizeClick={() => setShowCreator(true)}
-            onToggleSkateboard={() => setShowSkateboard(prev => !prev)}
-            showSkateboard={showSkateboard}
-          />
-        )}
-        <div style={{ position: 'fixed', top: 20, right: 160, zIndex: 1000, display: 'flex', gap: 8 }}>
-          <button
-            style={{
-              padding: '10px 16px',
-              backgroundColor: showRaceGame ? '#e67e22' : '#2980b9',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              marginLeft: 8
-            }}
-            onClick={(e) => {
-              setShowRaceGame((v) => !v);
-              e.currentTarget.blur(); // Remove focus after clicking to prevent spacebar toggling
-            }}
-          >
-            {showRaceGame ? 'Close Race Game' : 'Race Game'}
-          </button>
-          {/* RaceGameUI overlays/listeners outside Canvas */}
-          {showRaceGame && <RaceGameUI />}
-        </div>
-        {/* EmojiButton and CameraToggleButton moved to top right corner */}
-        <StatsMonitor />
-        {showCreator && (
-          <CharacterCreator
-            initialColor={characterColor}
-            onSave={handleSaveColor}
-            onCancel={handleCancel}
-          />
-        )}
-      </GameSystemProvider>
+          {/* EmojiButton and CameraToggleButton moved to top right corner */}
+          <StatsMonitor />
+          {showCreator && (
+            <CharacterCreator
+              initialColor={characterColor}
+              onSave={handleSaveColor}
+              onCancel={handleCancel}
+            />
+          )}
+          
+          {/* Voice Chat Controls */}
+          <VoiceChatControls />
+        </GameSystemProvider>
+      </VoiceChatProvider>
     </MultiplayerProvider>
   );
 }

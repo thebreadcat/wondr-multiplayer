@@ -6,9 +6,24 @@ const cors = require('cors');
 const ServerSpatialGrid = require('./src/utils/serverSpatialGrid');
 const { setupRaceBuilderSocketHandlers } = require('./src/games/race/server');
 
-// Create express app with simple CORS config
+// Create express app with CORS config for production and development
 const app = express();
-app.use(cors());
+
+// Configure CORS for both Express and Socket.IO
+const corsOptions = {
+  origin: [
+    'https://wondr-multiplayer.vercel.app',
+    'https://thefishnfts.com',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173'
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false
+};
+
+app.use(cors(corsOptions));
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -16,8 +31,16 @@ const server = http.createServer(app);
 // Create Socket.IO instance with CORS settings
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
+    origin: [
+      'https://wondr-multiplayer.vercel.app',
+      'https://thefishnfts.com',
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://127.0.0.1:5173'
+    ],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: false
   },
   allowEIO3: true,
   transports: ['websocket', 'polling'],  // Try websocket first, then polling
@@ -481,6 +504,82 @@ io.on('connection', (socket) => {
     */
   });
 
+  // ========== WEBRTC VOICE CHAT SIGNALING ==========
+  
+  // Handle WebRTC signaling for voice chat
+  socket.on('webrtc-signal', (data) => {
+    const { targetId, signal, from } = data;
+    
+    // Validate the data
+    if (!targetId || !signal || !from) {
+      console.error('[SERVER] Invalid WebRTC signal data:', data);
+      return;
+    }
+    
+    // Safe substring with null checks
+    const fromShort = from ? from.substring(0, 6) : 'unknown';
+    const targetShort = targetId ? targetId.substring(0, 6) : 'unknown';
+    
+    console.log(`[SERVER] 🔄 WebRTC Signal: ${fromShort} -> ${targetShort}`);
+    console.log(`[SERVER] Signal type: ${signal.type || 'unknown'}`);
+    
+    // Find the target socket
+    const targetSocket = io.sockets.sockets.get(targetId);
+    if (targetSocket) {
+      console.log(`[SERVER] ✅ Relaying WebRTC signal from ${fromShort} to ${targetShort}`);
+      targetSocket.emit('webrtc-signal', { from, signal });
+    } else {
+      console.log(`[SERVER] ❌ Target socket ${targetShort} not found for WebRTC signal`);
+      // Send error back to sender
+      socket.emit('webrtc-error', { 
+        targetId, 
+        error: 'Target player not found',
+        from: targetId 
+      });
+    }
+  });
+
+  // Handle voice chat join notifications
+  socket.on('voice-chat-join', (data) => {
+    const { playerId } = data;
+    
+    // Safe substring with null check
+    const playerShort = playerId ? playerId.substring(0, 6) : 'unknown';
+    
+    console.log(`[SERVER] 🎤 Player ${playerShort} joined voice chat`);
+    console.log(`[SERVER] Total connected clients: ${io.engine.clientsCount}`);
+    
+    // Broadcast to all other connected clients
+    socket.broadcast.emit('voice-chat-join', { playerId });
+  });
+
+  // Handle voice chat leave notifications
+  socket.on('voice-chat-leave', (data) => {
+    const { playerId } = data;
+    
+    // Safe substring with null check
+    const playerShort = playerId ? playerId.substring(0, 6) : 'unknown';
+    
+    console.log(`[SERVER] 🔇 Player ${playerShort} left voice chat`);
+    
+    // Broadcast to all other connected clients
+    socket.broadcast.emit('voice-chat-leave', { playerId });
+  });
+
+  // Handle voice activity updates
+  socket.on('voice-activity', (data) => {
+    const { playerId, isActive } = data;
+    
+    // Only log when activity starts to avoid spam, with null check
+    if (isActive && playerId) {
+      const playerShort = playerId.substring(0, 6);
+      console.log(`[SERVER] 🗣️ Voice activity from ${playerShort}`);
+    }
+    
+    // Broadcast voice activity to all other clients
+    socket.broadcast.emit('voice-activity', { playerId, isActive });
+  });
+
   socket.on('disconnect', () => {
     // Remove player from spatial grid
     worldGrid.removeEntity(socket.id);
@@ -789,7 +888,7 @@ function endGame(io, roomId) {
 }
 
 // Start the server right away (no initialization needed)
-server.listen(3006, () => {
-  console.log('[SERVER] Listening on port 3006');
+server.listen(3000, () => {
+  console.log('[SERVER] Listening on port 3000');
   console.log('[SERVER] Race builder system ready');
 });
