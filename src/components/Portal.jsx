@@ -98,17 +98,27 @@ export default function Portal({
               // Increased offset to spawn outside portal range to prevent immediate re-teleportation
               const forwardOffset = radius + 1.5; // Spawn outside portal radius + extra buffer
               
-              // Calculate forward direction based on portal rotation (Y rotation primarily)
-              const yRotation = teleportRotation[1];
-              const forwardX = Math.sin(yRotation) * forwardOffset;
-              const forwardZ = Math.cos(yRotation) * forwardOffset;
+              // Calculate spawn direction - place player in front of each portal
+              let forwardX, forwardZ, forwardY;
+              
+              if (teleportTarget === portalB) {
+                // Portal B faces west (-90 degrees), so spawn in front (west direction)
+                forwardZ = +forwardOffset; // West (negative X)
+                forwardY = 0;
+                forwardX = 0;
+              } else {
+                // Portal A has no rotation, faces default direction, spawn in front
+                forwardX = +forwardOffset;
+                forwardY = 0;
+                forwardZ = 0; // South (positive Z)
+              }
               
               // Delay the actual teleportation to allow fade effect
               setTimeout(() => {
                 // Teleport the player
                 const teleportPos = {
                   x: teleportTarget[0] + forwardX,
-                  y: teleportTarget[1] + 0.5, // Slightly above the portal
+                  y: teleportTarget[1] + forwardY, // Slightly above the portal
                   z: teleportTarget[2] + forwardZ
                 };
                 

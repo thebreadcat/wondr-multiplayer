@@ -935,7 +935,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
 
   // Mouse and touch event handlers for camera rotation in third-person mode
   const handlePointerDown = useCallback((event) => {
-    if (isFirstPerson) return;
+    if (isFirstPerson) return; // Don't interfere with first-person mode
     
     // Get touch/mouse coordinates
     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
@@ -1004,7 +1004,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
   }, [isFirstPerson, gl]);
 
   const handlePointerMove = useCallback((event) => {
-    if (!isMouseDown || isFirstPerson) return;
+    if (!isMouseDown || isFirstPerson) return; // Don't interfere with first-person mode
     
     event.preventDefault();
     
@@ -1033,7 +1033,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
   }, [isMouseDown, isFirstPerson, mouseSensitivity]);
 
   const handlePointerUp = useCallback((event) => {
-    if (isFirstPerson) return;
+    if (isFirstPerson) return; // Don't interfere with first-person mode
     
     event.preventDefault();
     setIsMouseDown(false);
@@ -1210,9 +1210,16 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       }
     };
     
-    const handleClick = () => {
+    const handleClick = (event) => {
       if (isFirstPerson && document.pointerLockElement !== canvas) {
-        canvas.requestPointerLock();
+        event.preventDefault();
+        event.stopPropagation();
+        console.log('[CharacterController] Requesting pointer lock for first-person mode');
+        canvas.requestPointerLock().then(() => {
+          console.log('[CharacterController] Pointer lock request successful');
+        }).catch((error) => {
+          console.error('[CharacterController] Pointer lock request failed:', error);
+        });
       }
     };
     
