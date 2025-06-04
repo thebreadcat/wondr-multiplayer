@@ -139,6 +139,14 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
   // Get Three.js state for canvas access
   const { gl } = useThree();
   
+  // Mobile controls state
+  const mobileInputs = useRef({
+    joystick: { x: 0, y: 0 },
+    camera: { x: 0, y: 0 },
+    jump: false,
+    run: false
+  });
+  
   // Mouse controls for camera rotation in third-person mode
   const [isMouseDown, setIsMouseDown] = useState(false);
   const lastMousePosition = useRef({ x: 0, y: 0 });
@@ -168,6 +176,9 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     // Ensure we start with the idle animation
     console.log('[CharacterController] Initializing with idle animation');
     setAnimationState('idle');
+    
+    // Initialize camera rotation to match character rotation
+    rotationTarget.current = characterRotationTarget.current;
     
     // Send initial animation state to server
     sendMove({
@@ -219,7 +230,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
   useFrame((state, delta) => {
     // Cap delta to avoid large jumps if framerate drops temporarily
     const cappedDelta = Math.min(delta, 0.1);
-    const { forward, backward, left, right, run, jump } = getKeys();
+    const keys = getKeys();
     if (!rigidBody.current) return;
     
     // Check if camera mode changed and start transition timer
@@ -272,7 +283,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     
     // Check if we need to reset animation state
     // This handles cases where the character is moving but stuck in a non-movement animation
-    if (!jump) { // Check regardless of isOnGround status to be safe
+    if (!keys.jump) { // Check regardless of isOnGround status to be safe
       const velocity = rigidBody.current.linvel();
       const isMoving = Math.abs(velocity.x) > 0.1 || Math.abs(velocity.z) > 0.1;
       
@@ -342,6 +353,47 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
 
     const movement = { x: 0, z: 0 };
     
+    // Movement logic
+    const moveForward = keys.forward;
+    const moveBackward = keys.backward;
+    const moveLeft = keys.left;
+    const moveRight = keys.right;
+    const keyboardIsRunning = keys.run;
+    const keyboardIsJumping = keys.jump;
+
+    // Combine keyboard and mobile inputs with deadzone for joystick
+    const joystickDeadzone = 0.15; // Increased deadzone to prevent drift and reset movement
+    const combinedMoveForward = keys.forward || mobileInputs.current.joystick.y > joystickDeadzone;
+    const combinedMoveBackward = keys.backward || mobileInputs.current.joystick.y < -joystickDeadzone;
+    const combinedMoveLeft = keys.left || mobileInputs.current.joystick.x < -joystickDeadzone;
+    const combinedMoveRight = keys.right || mobileInputs.current.joystick.x > joystickDeadzone;
+    const combinedIsRunning = keys.run || mobileInputs.current.run;
+    const combinedIsJumping = keys.jump || mobileInputs.current.jump;
+
+    // Calculate movement intensity for mobile joystick (only if above deadzone)
+    const joystickIntensity = Math.sqrt(
+      mobileInputs.current.joystick.x ** 2 + mobileInputs.current.joystick.y ** 2
+    );
+    const mobileSpeedMultiplier = joystickIntensity > joystickDeadzone ? Math.min(joystickIntensity, 1) : 0;
+
+    // Check if we're using joystick for movement (affects character rotation) - with deadzone
+    const isUsingJoystick = joystickIntensity > joystickDeadzone;
+    
+    // Check if we're using camera joystick for camera control
+    const cameraJoystickDeadzone = 0.15; // Same deadzone for camera joystick
+    const isUsingCameraJoystick = Math.sqrt(
+      mobileInputs.current.camera.x ** 2 + mobileInputs.current.camera.y ** 2
+    ) > cameraJoystickDeadzone;
+
+    // Determine if any movement key is pressed
+    const isMoving = combinedMoveForward || combinedMoveBackward || combinedMoveLeft || combinedMoveRight;
+
+    // Calculate speed based on running state and mobile input intensity
+    let currentSpeed = combinedIsRunning ? RUN_SPEED : WALK_SPEED;
+    if (joystickIntensity > 0) {
+      currentSpeed *= mobileSpeedMultiplier;
+    }
+
     // Handle movement differently based on camera mode
     if (isFirstPerson) {
       if (isPointerLocked) {
@@ -352,21 +404,21 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
         // Apply the camera's horizontal rotation to the movement vectors
         forwardVector.applyAxisAngle(new Vector3(0, 1, 0), mouseRotation.current.y);
         rightVector.applyAxisAngle(new Vector3(0, 1, 0), mouseRotation.current.y);
-        
+
         // Calculate movement based on rotated vectors
-        if (forward) {
+        if (combinedMoveForward) {
           movement.x += forwardVector.x;
           movement.z += forwardVector.z;
         }
-        if (backward) {
+        if (combinedMoveBackward) {
           movement.x -= forwardVector.x;
           movement.z -= forwardVector.z;
         }
-        if (left) {
+        if (combinedMoveLeft) {
           movement.x -= rightVector.x;
           movement.z -= rightVector.z;
         }
-        if (right) {
+        if (combinedMoveRight) {
           movement.x += rightVector.x;
           movement.z += rightVector.z;
         }
@@ -379,38 +431,38 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
         }
       } else {
         // Standard first-person movement when not pointer locked
-        if (forward) movement.z = 1;
-        if (backward) movement.z = -1;
-        if (left) movement.x = 1; // Match third-person controls
-        if (right) movement.x = -1; // Match third-person controls
+        if (combinedMoveForward) movement.z = 1;
+        if (combinedMoveBackward) movement.z = -1;
+        if (combinedMoveLeft) movement.x = 1;
+        if (combinedMoveRight) movement.x = -1;
       }
     } else {
       // Third-person movement with camera-relative strafing
       // Calculate camera-relative movement directions
       const cameraRotation = rotationTarget.current;
       
-      if (forward || backward || left || right) {
+      if (combinedMoveForward || combinedMoveBackward || combinedMoveLeft || combinedMoveRight) {
         // Reset movement vector
         movement.x = 0;
         movement.z = 0;
-        
+
         // Forward/backward movement relative to camera
-        if (forward) {
+        if (combinedMoveForward) {
           movement.x += Math.sin(cameraRotation);
           movement.z += Math.cos(cameraRotation);
         }
-        if (backward) {
+        if (combinedMoveBackward) {
           movement.x -= Math.sin(cameraRotation);
           movement.z -= Math.cos(cameraRotation);
         }
         
         // Left/right strafing relative to camera (perpendicular to camera direction)
-        if (left) {
-          movement.x += Math.cos(cameraRotation); // 90 degrees left from camera direction
+        if (combinedMoveLeft) {
+          movement.x += Math.cos(cameraRotation);
           movement.z -= Math.sin(cameraRotation);
         }
-        if (right) {
-          movement.x -= Math.cos(cameraRotation); // 90 degrees right from camera direction
+        if (combinedMoveRight) {
+          movement.x -= Math.cos(cameraRotation);
           movement.z += Math.sin(cameraRotation);
         }
         
@@ -423,50 +475,54 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       }
     }
 
-    let speed = run ? RUN_SPEED : WALK_SPEED;
-
-    // Remove camera rotation from A/D keys - camera stays fixed
-    // Only rotate camera with mouse or other explicit camera controls
-    // if (movement.x !== 0) rotationTarget.current += ROTATION_SPEED * movement.x;
-
-    if (movement.x !== 0 || movement.z !== 0) {
-      // Character faces absolute world direction based on key pressed, not movement direction
-      let targetRotation = characterRotationTarget.current;
-      
-      // Determine character facing direction based on keys pressed (absolute world directions)
-      if (forward && !backward && !left && !right) {
-        // W key - face North (forward in world space)
-        targetRotation = 0;
-      } else if (backward && !forward && !left && !right) {
-        // S key - face South (backward in world space)
-        targetRotation = Math.PI;
-      } else if (left && !right && !forward && !backward) {
-        // A key - face West (left in world space)
-        targetRotation = Math.PI / 2;
-      } else if (right && !left && !forward && !backward) {
-        // D key - face East (right in world space)
-        targetRotation = -Math.PI / 2;
-      } else if (forward && right && !backward && !left) {
-        // W+D - face Northeast
-        targetRotation = -Math.PI / 4;
-      } else if (forward && left && !backward && !right) {
-        // W+A - face Northwest
-        targetRotation = Math.PI / 4;
-      } else if (backward && right && !forward && !left) {
-        // S+D - face Southeast
-        targetRotation = -3 * Math.PI / 4;
-      } else if (backward && left && !forward && !right) {
-        // S+A - face Southwest
-        targetRotation = 3 * Math.PI / 4;
+    // Character rotation based on movement direction
+    if (isUsingJoystick) {
+      // For mobile joystick: rotate character to face movement direction
+      if (isMoving) {
+        // Calculate the angle based on joystick input
+        // Negate x to swap left/right directions for mobile
+        const joystickAngle = Math.atan2(-mobileInputs.current.joystick.x, mobileInputs.current.joystick.y);
+        
+        // Apply camera rotation offset to make movement relative to camera
+        characterRotationTarget.current = joystickAngle + rotationTarget.current;
       }
-      
-      characterRotationTarget.current = targetRotation;
-      velocity.x = movement.x * speed;
-      velocity.z = movement.z * speed;
+      // If not moving with joystick, keep current character rotation
+    } else {
+      // Desktop keyboard controls: use absolute world directions (not camera-relative)
+      if (combinedMoveForward && !combinedMoveBackward && !combinedMoveLeft && !combinedMoveRight) {
+        // Moving forward (W key) - face North (0 degrees)
+        characterRotationTarget.current = 0;
+      } else if (combinedMoveBackward && !combinedMoveForward && !combinedMoveLeft && !combinedMoveRight) {
+        // Moving backward (S key) - face South (180 degrees)
+        characterRotationTarget.current = Math.PI;
+      } else if (combinedMoveLeft && !combinedMoveRight && !combinedMoveForward && !combinedMoveBackward) {
+        // Moving left (A key) - face East (90 degrees) - swapped from West
+        characterRotationTarget.current = Math.PI * 0.5;
+      } else if (combinedMoveRight && !combinedMoveLeft && !combinedMoveForward && !combinedMoveBackward) {
+        // Moving right (D key) - face West (270 degrees) - swapped from East
+        characterRotationTarget.current = Math.PI * 1.5;
+      } else if (combinedMoveForward && combinedMoveLeft && !combinedMoveBackward && !combinedMoveRight) {
+        // Moving forward-left (W+A) - face Northeast (45 degrees) - swapped from Northwest
+        characterRotationTarget.current = Math.PI * 0.25;
+      } else if (combinedMoveForward && combinedMoveRight && !combinedMoveBackward && !combinedMoveLeft) {
+        // Moving forward-right (W+D) - face Northwest (315 degrees) - swapped from Northeast
+        characterRotationTarget.current = Math.PI * 1.75;
+      } else if (combinedMoveBackward && combinedMoveLeft && !combinedMoveForward && !combinedMoveRight) {
+        // Moving backward-left (S+A) - face Southeast (135 degrees) - swapped from Southwest
+        characterRotationTarget.current = Math.PI * 0.75;
+      } else if (combinedMoveBackward && combinedMoveRight && !combinedMoveForward && !combinedMoveLeft) {
+        // Moving backward-right (S+D) - face Southwest (225 degrees) - swapped from Southeast
+        characterRotationTarget.current = Math.PI * 1.25;
+      }
+    }
+
+    if (isMoving) {
+      velocity.x = movement.x * currentSpeed;
+      velocity.z = movement.z * currentSpeed;
       
       // Set animation state based on skateboard status
       if (isOnGround) {
-        const newAnimState = showSkateboard ? "walk" : (speed === RUN_SPEED ? "run" : "walk");
+        const newAnimState = showSkateboard ? "walk" : (currentSpeed === RUN_SPEED ? "run" : "walk");
         if (animationState !== newAnimState) {
           console.log(`[CharacterController] Setting animation to ${newAnimState} from ${animationState}`);
           setAnimationState(newAnimState);
@@ -533,7 +589,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     }
 
     // Handle jump with cooldown instead of ground check
-    if (jump && !wasJumpPressed.current && jumpCooldown.current <= 0) {
+    if (combinedIsJumping && !wasJumpPressed.current && jumpCooldown.current <= 0) {
       velocity.y = jumpVelocity;
       jumpCooldown.current = totalJumpTime;
       jumpInProgress.current = true;
@@ -578,7 +634,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
         jumpAnimationTimer.current = null;
       }, 1500); // 1.5 second safety timer
     }
-    wasJumpPressed.current = jump;
+    wasJumpPressed.current = combinedIsJumping;
 
     rigidBody.current.setLinvel(velocity, true);
 
@@ -626,15 +682,60 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     // This ensures character stays at consistent distance from bottom of screen
     const cameraSpeed = 0.1; // Fixed camera speed for all movement types
 
+    // Apply camera joystick input for mobile camera controls
+    const cameraJoystickIntensity = Math.sqrt(
+      mobileInputs.current.camera.x ** 2 + mobileInputs.current.camera.y ** 2
+    );
+    
+    if (cameraJoystickIntensity > cameraJoystickDeadzone && !isFirstPerson) {
+      // Apply camera joystick input to camera rotation
+      const cameraRotationSpeed = 0.03; // Adjust sensitivity
+      
+      // Horizontal rotation (left/right)
+      rotationTarget.current -= mobileInputs.current.camera.x * cameraRotationSpeed;
+      
+      // Vertical rotation (up/down) - inverted for natural feel
+      cameraVerticalAngle.current += mobileInputs.current.camera.y * cameraRotationSpeed;
+      
+      // Clamp vertical rotation
+      const maxUpAngle = Math.PI / 2.2; // ~82 degrees up
+      const maxDownAngle = -Math.PI / 12; // ~15 degrees down
+      cameraVerticalAngle.current = Math.max(maxDownAngle, Math.min(maxUpAngle, cameraVerticalAngle.current));
+      
+      // Dynamic zoom based on vertical angle
+      const normalizedVerticalAngle = (cameraVerticalAngle.current - maxDownAngle) / (maxUpAngle - maxDownAngle);
+      const minDistance = 3;
+      const maxDistance = 8;
+      cameraDistance.current = minDistance + (maxDistance - minDistance) * (1 - normalizedVerticalAngle);
+    }
+
     // Update container rotation (camera orbit point) with delta time for smooth motion
     if (container.current) {
       // Use a slower rotation speed for smoother camera movement
       const rotationLerpFactor = CAMERA_ROTATION_SPEED * (60 * cappedDelta); // Normalize by target framerate
-      container.current.rotation.y = MathUtils.lerp(
-        container.current.rotation.y,
-        rotationTarget.current,
-        rotationLerpFactor
-      );
+      
+      // Check if we've ever used mobile camera controls
+      const hasUsedMobileCamera = Math.abs(rotationTarget.current - characterRotationTarget.current) > 0.1;
+      
+      // Only sync camera rotation with character rotation when using keyboard controls
+      // AND we haven't used mobile camera controls to set an independent camera position
+      if (!isUsingJoystick && !isUsingCameraJoystick && !hasUsedMobileCamera) {
+        // Keyboard controls: camera follows character rotation
+        container.current.rotation.y = MathUtils.lerp(
+          container.current.rotation.y,
+          characterRotationTarget.current,
+          rotationLerpFactor
+        );
+        // Keep rotationTarget in sync with character when following
+        rotationTarget.current = characterRotationTarget.current;
+      } else {
+        // Joystick controls or independent camera: use rotationTarget for camera
+        container.current.rotation.y = MathUtils.lerp(
+          container.current.rotation.y,
+          rotationTarget.current,
+          rotationLerpFactor
+        );
+      }
     }
 
     // Update camera position using refs with delta-time interpolation
@@ -703,8 +804,8 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
           const verticalOffset = dynamicDistance * Math.sin(cameraVerticalAngle.current);
           
           // Calculate camera position behind character based on rotation and vertical angle
-          cameraOffset.x = -Math.sin(container.current.rotation.y) * horizontalDistance;
-          cameraOffset.z = -Math.cos(container.current.rotation.y) * horizontalDistance;
+          cameraOffset.x = -Math.sin(rotationTarget.current) * horizontalDistance;
+          cameraOffset.z = -Math.cos(rotationTarget.current) * horizontalDistance;
           
           // Set height based on vertical angle and base camera height
           cameraOffset.y = CAMERA_HEIGHT + verticalOffset;
@@ -806,60 +907,223 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     return () => clearInterval(physicsLoop);
   }, []);
 
-  // Third-person pointer lock controls
+  // Set up mobile controls interface
   useEffect(() => {
-    if (isFirstPerson) return; // Only for third-person mode
+    // Create global mobile controls interface
+    window.mobileControls = {
+      handleJoystickMove: (input) => {
+        mobileInputs.current.joystick = input;
+      },
+      handleCameraMove: (input) => {
+        mobileInputs.current.camera = input;
+      },
+      handleJump: (pressed) => {
+        mobileInputs.current.jump = pressed;
+      },
+      handleRunToggle: () => {
+        mobileInputs.current.run = !mobileInputs.current.run;
+      }
+    };
     
+    return () => {
+      // Clean up global reference
+      if (window.mobileControls) {
+        delete window.mobileControls;
+      }
+    };
+  }, []);
+
+  // Mouse and touch event handlers for camera rotation in third-person mode
+  const handlePointerDown = useCallback((event) => {
+    if (isFirstPerson) return;
+    
+    // Get touch/mouse coordinates
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+    
+    // Get canvas dimensions for calculating relative positions
+    const canvas = gl.domElement;
+    const rect = canvas.getBoundingClientRect();
+    const relativeX = clientX - rect.left;
+    const relativeY = clientY - rect.top;
+    
+    // Define exclusion zones (areas where camera controls should not work)
+    const joystickZone = {
+      left: 0,
+      top: rect.height - 180, // Bottom 180px
+      right: 180, // Left 180px
+      bottom: rect.height
+    };
+    
+    const buttonZone = {
+      left: rect.width - 100, // 60px button + 40px margin = 100px from right edge
+      top: rect.height - 100, // 60px button + 40px margin = 100px from bottom edge
+      right: rect.width,
+      bottom: rect.height
+    };
+    
+    const cameraJoystickZone = {
+      left: rect.width - 300, // Larger camera joystick area (100px + positioning)
+      top: rect.height - 100,
+      right: rect.width - 200,
+      bottom: rect.height
+    };
+    
+    // Check if touch is in excluded zones
+    const isInJoystickZone = (
+      relativeX >= joystickZone.left && 
+      relativeX <= joystickZone.right && 
+      relativeY >= joystickZone.top && 
+      relativeY <= joystickZone.bottom
+    );
+    
+    const isInButtonZone = (
+      relativeX >= buttonZone.left && 
+      relativeX <= buttonZone.right && 
+      relativeY >= buttonZone.top && 
+      relativeY <= buttonZone.bottom
+    );
+    
+    const isInCameraJoystickZone = (
+      relativeX >= cameraJoystickZone.left && 
+      relativeX <= cameraJoystickZone.right && 
+      relativeY >= cameraJoystickZone.top && 
+      relativeY <= cameraJoystickZone.bottom
+    );
+    
+    // Only allow camera controls in the open area (not in joystick or button zones)
+    if (isInJoystickZone || isInButtonZone || isInCameraJoystickZone) {
+      return; // Don't start camera rotation
+    }
+    
+    // Prevent default to avoid text selection or other browser behaviors
+    event.preventDefault();
+    
+    setIsMouseDown(true);
+    lastMousePosition.current = { x: clientX, y: clientY };
+  }, [isFirstPerson, gl]);
+
+  const handlePointerMove = useCallback((event) => {
+    if (!isMouseDown || isFirstPerson) return;
+    
+    event.preventDefault();
+    
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+    const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+    
+    const deltaX = clientX - lastMousePosition.current.x;
+    const deltaY = clientY - lastMousePosition.current.y;
+
+    // Update camera rotation using separate camera rotation
+    rotationTarget.current -= deltaX * mouseSensitivity;
+    cameraVerticalAngle.current += deltaY * mouseSensitivity;
+
+    // Clamp vertical rotation with increased range and dynamic zoom
+    const maxUpAngle = Math.PI / 2.2; // ~82 degrees up
+    const maxDownAngle = -Math.PI / 12; // ~15 degrees down
+    cameraVerticalAngle.current = Math.max(maxDownAngle, Math.min(maxUpAngle, cameraVerticalAngle.current));
+
+    // Dynamic zoom based on vertical angle
+    const normalizedVerticalAngle = (cameraVerticalAngle.current - maxDownAngle) / (maxUpAngle - maxDownAngle);
+    const minDistance = 3;
+    const maxDistance = 8;
+    cameraDistance.current = minDistance + (maxDistance - minDistance) * (1 - normalizedVerticalAngle);
+
+    lastMousePosition.current = { x: clientX, y: clientY };
+  }, [isMouseDown, isFirstPerson, mouseSensitivity]);
+
+  const handlePointerUp = useCallback((event) => {
+    if (isFirstPerson) return;
+    
+    event.preventDefault();
+    setIsMouseDown(false);
+  }, [isFirstPerson]);
+
+  // Set up mouse and touch event listeners
+  useEffect(() => {
+    if (isFirstPerson) return;
+
     const canvas = gl.domElement;
     
-    const handlePointerLockChange = () => {
-      const isLocked = document.pointerLockElement === canvas;
-      setIsThirdPersonPointerLocked(isLocked);
-      
-      if (isLocked) {
-        canvas.style.cursor = 'none';
-        console.log('[CharacterController] Third-person pointer lock activated');
-      } else {
-        canvas.style.cursor = 'default';
-        console.log('[CharacterController] Third-person pointer lock released');
-      }
-    };
+    // Mouse events
+    canvas.addEventListener('mousedown', handlePointerDown);
+    canvas.addEventListener('mousemove', handlePointerMove);
+    canvas.addEventListener('mouseup', handlePointerUp);
     
-    const handleMouseMove = (event) => {
-      if (document.pointerLockElement === canvas && !isFirstPerson) {
-        // Apply sensitivity to control rotation speed
-        const sensitivity = 0.002;
-        
-        // Horizontal rotation (around Y axis)
-        thirdPersonMouseRotation.current.y -= event.movementX * sensitivity;
-        rotationTarget.current = thirdPersonMouseRotation.current.y;
-        
-        // Vertical rotation with limits (inverted: mouse up = look down, mouse down = look up)
-        thirdPersonMouseRotation.current.x += event.movementY * sensitivity;
-        thirdPersonMouseRotation.current.x = Math.max(
-          MIN_VERTICAL_ANGLE, 
-          Math.min(MAX_VERTICAL_ANGLE, thirdPersonMouseRotation.current.x)
-        );
-        cameraVerticalAngle.current = thirdPersonMouseRotation.current.x;
-      }
-    };
-    
-    const handleClick = () => {
-      if (!isFirstPerson && document.pointerLockElement !== canvas) {
-        canvas.requestPointerLock();
-      }
-    };
-    
-    const handleKeyDown = (event) => {
-      // ESC key to release pointer lock
-      if (event.key === 'Escape' && document.pointerLockElement === canvas) {
-        document.exitPointerLock();
-      }
-    };
-    
-    // Touch events for mobile pinch-to-zoom (keep these for mobile support)
+    // Touch events for mobile
+    canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
+    canvas.addEventListener('touchmove', handlePointerMove, { passive: false });
+    canvas.addEventListener('touchend', handlePointerUp, { passive: false });
+
+    // Keep pinch-to-zoom for mobile
     const handleTouchStart = (event) => {
-      if (!isFirstPerson && event.touches.length === 2) {
+      if (event.touches.length === 2) {
+        // Get canvas dimensions for calculating relative positions
+        const canvas = gl.domElement;
+        const rect = canvas.getBoundingClientRect();
+        
+        // Check if both touches are in the camera control area (not in joystick or button zones)
+        let allTouchesInCameraArea = true;
+        
+        for (let i = 0; i < event.touches.length; i++) {
+          const touch = event.touches[i];
+          const relativeX = touch.clientX - rect.left;
+          const relativeY = touch.clientY - rect.top;
+          
+          // Define exclusion zones
+          const joystickZone = {
+            left: 0,
+            top: rect.height - 180,
+            right: 180,
+            bottom: rect.height
+          };
+          
+          const buttonZone = {
+            left: rect.width - 100,
+            top: rect.height - 100,
+            right: rect.width,
+            bottom: rect.height
+          };
+          
+          const cameraJoystickZone = {
+            left: rect.width - 300,
+            top: rect.height - 100,
+            right: rect.width - 200,
+            bottom: rect.height
+          };
+          
+          const isInJoystickZone = (
+            relativeX >= joystickZone.left && 
+            relativeX <= joystickZone.right && 
+            relativeY >= joystickZone.top && 
+            relativeY <= joystickZone.bottom
+          );
+          
+          const isInButtonZone = (
+            relativeX >= buttonZone.left && 
+            relativeX <= buttonZone.right && 
+            relativeY >= buttonZone.top && 
+            relativeY <= buttonZone.bottom
+          );
+          
+          const isInCameraJoystickZone = (
+            relativeX >= cameraJoystickZone.left && 
+            relativeX <= cameraJoystickZone.right && 
+            relativeY >= cameraJoystickZone.top && 
+            relativeY <= cameraJoystickZone.bottom
+          );
+          
+          if (isInJoystickZone || isInButtonZone || isInCameraJoystickZone) {
+            allTouchesInCameraArea = false;
+            break;
+          }
+        }
+        
+        // Only start pinch-to-zoom if both touches are in the camera area
+        if (!allTouchesInCameraArea) {
+          return;
+        }
+        
         const touch1 = event.touches[0];
         const touch2 = event.touches[1];
         const distance = Math.sqrt(
@@ -871,7 +1135,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     };
     
     const handleTouchMove = (event) => {
-      if (!isFirstPerson && event.touches.length === 2) {
+      if (event.touches.length === 2 && lastTouchDistance.current > 0) {
         event.preventDefault();
         const touch1 = event.touches[0];
         const touch2 = event.touches[1];
@@ -880,13 +1144,11 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
           Math.pow(touch2.clientY - touch1.clientY, 2)
         );
         
-        if (lastTouchDistance.current > 0) {
-          const zoomDelta = (lastTouchDistance.current - distance) * 0.01 * ZOOM_SPEED;
-          cameraDistance.current = Math.max(
-            MIN_CAMERA_DISTANCE,
-            Math.min(MAX_CAMERA_DISTANCE, cameraDistance.current + zoomDelta)
-          );
-        }
+        const zoomDelta = (lastTouchDistance.current - distance) * 0.01 * ZOOM_SPEED;
+        cameraDistance.current = Math.max(
+          MIN_CAMERA_DISTANCE,
+          Math.min(MAX_CAMERA_DISTANCE, cameraDistance.current + zoomDelta)
+        );
         
         lastTouchDistance.current = distance;
       }
@@ -896,45 +1158,35 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       lastTouchDistance.current = 0;
     };
     
-    // Mouse wheel zoom (keep this for desktop)
+    // Mouse wheel zoom
     const handleWheel = (event) => {
-      if (!isFirstPerson) {
-        event.preventDefault();
-        const zoomDelta = event.deltaY * 0.001 * ZOOM_SPEED;
-        cameraDistance.current = Math.max(
-          MIN_CAMERA_DISTANCE,
-          Math.min(MAX_CAMERA_DISTANCE, cameraDistance.current + zoomDelta)
-        );
-      }
+      event.preventDefault();
+      const zoomDelta = event.deltaY * 0.001 * ZOOM_SPEED;
+      cameraDistance.current = Math.max(
+        MIN_CAMERA_DISTANCE,
+        Math.min(MAX_CAMERA_DISTANCE, cameraDistance.current + zoomDelta)
+      );
     };
-    
-    // Add event listeners
-    canvas.addEventListener('click', handleClick);
-    document.addEventListener('pointerlockchange', handlePointerLockChange);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('keydown', handleKeyDown);
+
+    // Add additional event listeners for zoom
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', handleTouchEnd);
-    
-    // Cleanup function
+
     return () => {
-      canvas.removeEventListener('click', handleClick);
-      document.removeEventListener('pointerlockchange', handlePointerLockChange);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('keydown', handleKeyDown);
+      canvas.removeEventListener('mousedown', handlePointerDown);
+      canvas.removeEventListener('mousemove', handlePointerMove);
+      canvas.removeEventListener('mouseup', handlePointerUp);
+      canvas.removeEventListener('touchstart', handlePointerDown);
+      canvas.removeEventListener('touchmove', handlePointerMove);
+      canvas.removeEventListener('touchend', handlePointerUp);
       canvas.removeEventListener('wheel', handleWheel);
       canvas.removeEventListener('touchstart', handleTouchStart);
       canvas.removeEventListener('touchmove', handleTouchMove);
       canvas.removeEventListener('touchend', handleTouchEnd);
-      
-      // Exit pointer lock when component unmounts or mode changes
-      if (document.pointerLockElement === canvas) {
-        document.exitPointerLock();
-      }
     };
-  }, [isFirstPerson, gl]);
+  }, [isFirstPerson, handlePointerDown, handlePointerMove, handlePointerUp, gl]);
 
   // Pointer lock controls for first-person mode
   useEffect(() => {
@@ -981,8 +1233,8 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     return () => {
       canvas.removeEventListener('click', handleClick);
       document.removeEventListener('pointerlockchange', handlePointerLockChange);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('keydown', handleKeyDown);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('keydown', handleKeyDown);
       
       // Exit pointer lock when component unmounts or first-person mode is disabled
       if (document.pointerLockElement === canvas) {

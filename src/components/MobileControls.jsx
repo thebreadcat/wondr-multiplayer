@@ -8,7 +8,7 @@ export const isMobile = () => {
 }
 
 // Virtual Joystick Component
-export function VirtualJoystick({ onMove }) {
+export function VirtualJoystick({ onMove, isCamera }) {
   const joystickRef = useRef()
   const knobRef = useRef()
   const [isDragging, setIsDragging] = useState(false)
@@ -18,17 +18,33 @@ export function VirtualJoystick({ onMove }) {
     if (!joystickRef.current) return
 
     const joystick = joystickRef.current
-    const knob = knobRef.current
+    const knob = joystick.querySelector('.joystick-knob')
+    
+    // Calculate center position
     const rect = joystick.getBoundingClientRect()
     const center = {
       x: rect.left + rect.width / 2,
       y: rect.top + rect.height / 2
     }
     setJoystickCenter(center)
+    
+    // Apply different styling for camera joystick
+    if (isCamera && knob) {
+      knob.style.backgroundColor = 'rgba(255, 165, 0, 0.9)'
+      knob.style.border = '2px solid rgba(255, 140, 0, 1)'
+    }
+
+    let isDragging = false
 
     const handleStart = (e) => {
+      isDragging = true
       setIsDragging(true)
       e.preventDefault()
+      
+      // Recalculate center on start
+      const rect = joystick.getBoundingClientRect()
+      center.x = rect.left + rect.width / 2
+      center.y = rect.top + rect.height / 2
     }
 
     const handleMove = (e) => {
@@ -39,7 +55,7 @@ export function VirtualJoystick({ onMove }) {
       const deltaX = touch.clientX - center.x
       const deltaY = touch.clientY - center.y
       const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
-      const maxDistance = 40
+      const maxDistance = 40 // Same max distance for both joysticks
 
       let x = deltaX
       let y = deltaY
@@ -49,7 +65,9 @@ export function VirtualJoystick({ onMove }) {
         y = (deltaY / distance) * maxDistance
       }
 
-      knob.style.transform = `translate(${x}px, ${y}px)`
+      if (knob) {
+        knob.style.transform = `translate(${x}px, ${y}px)`
+      }
       
       // Normalize values between -1 and 1
       const normalizedX = x / maxDistance
@@ -59,8 +77,11 @@ export function VirtualJoystick({ onMove }) {
     }
 
     const handleEnd = (e) => {
+      isDragging = false
       setIsDragging(false)
-      knob.style.transform = 'translate(0px, 0px)'
+      if (knob) {
+        knob.style.transform = 'translate(0px, 0px)'
+      }
       onMove({ x: 0, y: 0 })
       e.preventDefault()
     }
@@ -83,20 +104,20 @@ export function VirtualJoystick({ onMove }) {
       document.removeEventListener('mousemove', handleMove)
       document.removeEventListener('mouseup', handleEnd)
     }
-  }, [isDragging, onMove])
+  }, [onMove, isCamera])
 
   return (
     <div
       ref={joystickRef}
       style={{
         position: 'absolute',
-        bottom: '40px',
-        left: '40px',
+        bottom: isCamera ? '0px' : '40px',
+        left: isCamera ? '0px' : '40px',
         width: '100px',
         height: '100px',
         borderRadius: '50%',
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
-        border: '2px solid rgba(255, 255, 255, 0.5)',
+        backgroundColor: isCamera ? 'rgba(255, 165, 0, 0.3)' : 'rgba(255, 255, 255, 0.3)',
+        border: isCamera ? '2px solid rgba(255, 165, 0, 0.5)' : '2px solid rgba(255, 255, 255, 0.5)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -107,11 +128,12 @@ export function VirtualJoystick({ onMove }) {
     >
       <div
         ref={knobRef}
+        className="joystick-knob"
         style={{
           width: '40px',
           height: '40px',
           borderRadius: '50%',
-          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          backgroundColor: isCamera ? 'rgba(255, 165, 0, 0.8)' : 'rgba(255, 255, 255, 0.8)',
           transition: isDragging ? 'none' : 'transform 0.2s ease-out',
           pointerEvents: 'none'
         }}
@@ -121,7 +143,7 @@ export function VirtualJoystick({ onMove }) {
 }
 
 // Mobile Action Buttons
-export function MobileButtons({ onJump, onRun, isRunning }) {
+export function MobileButtons({ onJump, onRun, isRunning, onCameraMove }) {
   return (
     <div style={{
       position: 'absolute',
@@ -140,13 +162,13 @@ export function MobileButtons({ onJump, onRun, isRunning }) {
         onMouseDown={() => onJump(true)}
         onMouseUp={() => onJump(false)}
         style={{
-          width: '120px',
-          height: '120px',
+          width: '60px',
+          height: '60px',
           borderRadius: '50%',
           backgroundColor: 'rgba(65, 105, 225, 0.7)',
           border: '3px solid rgba(255, 255, 255, 0.7)',
           color: 'black',
-          fontSize: '24px',
+          fontSize: '16px',
           fontWeight: 'bold',
           touchAction: 'none',
           userSelect: 'none',
@@ -158,6 +180,18 @@ export function MobileButtons({ onJump, onRun, isRunning }) {
       >
         JUMP
       </button>
+      
+      {/* Camera Joystick */}
+      <div
+        style={{
+          position: 'absolute',
+          right: '200px',
+          bottom: '0px',
+          zIndex: 1000,
+        }}
+      >
+        <VirtualJoystick onMove={onCameraMove} isCamera={true} />
+      </div>
       
       {/* Smaller Run Button */}
       <button

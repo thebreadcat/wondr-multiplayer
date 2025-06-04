@@ -92,6 +92,12 @@ function App() {
     }
   }, []);
 
+  const handleCameraMove = useCallback((input) => {
+    if (window.mobileControls) {
+      window.mobileControls.handleCameraMove(input);
+    }
+  }, []);
+
   const handleJump = useCallback((pressed) => {
     if (window.mobileControls) {
       window.mobileControls.handleJump(pressed);
@@ -187,6 +193,7 @@ function App() {
                   onJump={handleJump} 
                   onRun={handleRunToggle} 
                   isRunning={mobileRunning}
+                  onCameraMove={handleCameraMove}
                 />
               </>
             ) : null}
