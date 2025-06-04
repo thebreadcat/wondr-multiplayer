@@ -36,6 +36,19 @@ const CAMERA_HEIGHT = 2.5; // Camera height above character
 const CAMERA_DISTANCE = 6; // Camera distance behind character
 const CAMERA_ROTATION_SPEED = 0.05; // Reduced rotation speed for smoother camera movement
 
+// Add new camera control constants
+const MIN_CAMERA_DISTANCE = 2; // Minimum zoom distance
+const MAX_CAMERA_DISTANCE = 15; // Maximum zoom distance
+const MIN_VERTICAL_ANGLE = -Math.PI / 12; // Minimum vertical angle (15 degrees down) - prevents looking below ground
+const MAX_VERTICAL_ANGLE = Math.PI / 2.2; // Maximum vertical angle (82 degrees up) - increased for better upward view
+const ZOOM_SPEED = 0.5; // Zoom sensitivity
+const VERTICAL_ROTATION_SPEED = 0.003; // Vertical rotation sensitivity
+
+// Dynamic zoom constants for preventing floor clipping
+const BASE_CAMERA_DISTANCE = 6; // Base camera distance
+const MIN_DYNAMIC_DISTANCE = 3; // Minimum distance when looking up
+const ZOOM_FACTOR = 0.7; // How much to zoom in when looking up (0 = no zoom, 1 = full zoom)
+
 const normalizeAngle = (angle) => {
   while (angle > Math.PI) angle -= 2 * Math.PI;
   while (angle < -Math.PI) angle += 2 * Math.PI;
@@ -126,51 +139,22 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
   // Get Three.js state for canvas access
   const { gl } = useThree();
   
-  // Pointer lock controls for first-person mode
-  useEffect(() => {
-    if (!isFirstPerson) return;
-    
-    const canvas = gl.domElement;
-    
-    const handlePointerLockChange = () => {
-      setIsPointerLocked(document.pointerLockElement === canvas);
-    };
-    
-    const handleMouseMove = (event) => {
-      if (document.pointerLockElement === canvas) {
-        // Apply a sensitivity factor to control rotation speed
-        const sensitivity = 0.002;
-        mouseRotation.current.y -= event.movementX * sensitivity;
-        mouseRotation.current.x -= event.movementY * sensitivity;
-        
-        // Clamp vertical rotation to prevent camera flipping
-        mouseRotation.current.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, mouseRotation.current.x));
-      }
-    };
-    
-    const handleClick = () => {
-      if (isFirstPerson && document.pointerLockElement !== canvas) {
-        canvas.requestPointerLock();
-      }
-    };
-    
-    // Add event listeners
-    canvas.addEventListener('click', handleClick);
-    document.addEventListener('pointerlockchange', handlePointerLockChange);
-    document.addEventListener('mousemove', handleMouseMove);
-    
-    // Cleanup function
-    return () => {
-      canvas.removeEventListener('click', handleClick);
-      document.removeEventListener('pointerlockchange', handlePointerLockChange);
-      document.removeEventListener('mousemove', handleMouseMove);
-      
-      // Exit pointer lock when component unmounts or first-person mode is disabled
-      if (document.pointerLockElement === canvas) {
-        document.exitPointerLock();
-      }
-    };
-  }, [isFirstPerson, gl]);
+  // Mouse controls for camera rotation in third-person mode
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const lastMousePosition = useRef({ x: 0, y: 0 });
+  const mouseSensitivity = 0.005; // Adjust this value to control mouse sensitivity
+  
+  // Add new camera control state
+  const cameraDistance = useRef(CAMERA_DISTANCE);
+  const cameraVerticalAngle = useRef(0); // Vertical camera angle
+  const lastTouchDistance = useRef(0); // For pinch-to-zoom on mobile
+  
+  // Replace mouse drag controls with pointer lock controls for third-person
+  const [isThirdPersonPointerLocked, setIsThirdPersonPointerLocked] = useState(false);
+  const thirdPersonMouseRotation = useRef({ x: 0, y: 0 });
+  
+  // Track current position for respawn with offset
+  const currentPosition = useRef(adjustedInitialPosition);
 
   const characterRotationTarget = useRef(0);
   const rotationTarget = useRef(0);
@@ -178,9 +162,6 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
   const wasJumpPressed = useRef(false);
   const jumpCooldown = useRef(0);
   const jumpInProgress = useRef(false);
-
-  // Track current position for respawn with offset
-  const currentPosition = useRef(adjustedInitialPosition);
 
   // Initialize animation on mount and handle cleanup
   useEffect(() => {
@@ -404,21 +385,84 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
         if (right) movement.x = -1; // Match third-person controls
       }
     } else {
-      // Third-person movement (original behavior)
-      if (forward) movement.z = 1;
-      if (backward) movement.z = -1;
-      if (left) movement.x = 1;
-      if (right) movement.x = -1;
+      // Third-person movement with camera-relative strafing
+      // Calculate camera-relative movement directions
+      const cameraRotation = rotationTarget.current;
+      
+      if (forward || backward || left || right) {
+        // Reset movement vector
+        movement.x = 0;
+        movement.z = 0;
+        
+        // Forward/backward movement relative to camera
+        if (forward) {
+          movement.x += Math.sin(cameraRotation);
+          movement.z += Math.cos(cameraRotation);
+        }
+        if (backward) {
+          movement.x -= Math.sin(cameraRotation);
+          movement.z -= Math.cos(cameraRotation);
+        }
+        
+        // Left/right strafing relative to camera (perpendicular to camera direction)
+        if (left) {
+          movement.x += Math.cos(cameraRotation); // 90 degrees left from camera direction
+          movement.z -= Math.sin(cameraRotation);
+        }
+        if (right) {
+          movement.x -= Math.cos(cameraRotation); // 90 degrees right from camera direction
+          movement.z += Math.sin(cameraRotation);
+        }
+        
+        // Normalize movement vector for diagonal movement
+        const length = Math.sqrt(movement.x * movement.x + movement.z * movement.z);
+        if (length > 0) {
+          movement.x /= length;
+          movement.z /= length;
+        }
+      }
     }
 
     let speed = run ? RUN_SPEED : WALK_SPEED;
 
-    if (movement.x !== 0) rotationTarget.current += ROTATION_SPEED * movement.x;
+    // Remove camera rotation from A/D keys - camera stays fixed
+    // Only rotate camera with mouse or other explicit camera controls
+    // if (movement.x !== 0) rotationTarget.current += ROTATION_SPEED * movement.x;
 
     if (movement.x !== 0 || movement.z !== 0) {
-      characterRotationTarget.current = Math.atan2(movement.x, movement.z);
-      velocity.x = Math.sin(rotationTarget.current + characterRotationTarget.current) * speed;
-      velocity.z = Math.cos(rotationTarget.current + characterRotationTarget.current) * speed;
+      // Character faces absolute world direction based on key pressed, not movement direction
+      let targetRotation = characterRotationTarget.current;
+      
+      // Determine character facing direction based on keys pressed (absolute world directions)
+      if (forward && !backward && !left && !right) {
+        // W key - face North (forward in world space)
+        targetRotation = 0;
+      } else if (backward && !forward && !left && !right) {
+        // S key - face South (backward in world space)
+        targetRotation = Math.PI;
+      } else if (left && !right && !forward && !backward) {
+        // A key - face West (left in world space)
+        targetRotation = Math.PI / 2;
+      } else if (right && !left && !forward && !backward) {
+        // D key - face East (right in world space)
+        targetRotation = -Math.PI / 2;
+      } else if (forward && right && !backward && !left) {
+        // W+D - face Northeast
+        targetRotation = -Math.PI / 4;
+      } else if (forward && left && !backward && !right) {
+        // W+A - face Northwest
+        targetRotation = Math.PI / 4;
+      } else if (backward && right && !forward && !left) {
+        // S+D - face Southeast
+        targetRotation = -3 * Math.PI / 4;
+      } else if (backward && left && !forward && !right) {
+        // S+A - face Southwest
+        targetRotation = 3 * Math.PI / 4;
+      }
+      
+      characterRotationTarget.current = targetRotation;
+      velocity.x = movement.x * speed;
+      velocity.z = movement.z * speed;
       
       // Set animation state based on skateboard status
       if (isOnGround) {
@@ -642,16 +686,28 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
           // Get the current character position
           const characterPos = new Vector3(position.x, position.y, position.z);
           
-          // Calculate camera position based on fixed height and distance
-          // This ensures the character stays at a consistent position on screen
+          // Calculate dynamic camera distance based on vertical angle to prevent floor clipping
+          const normalizedVerticalAngle = (cameraVerticalAngle.current - MIN_VERTICAL_ANGLE) / (MAX_VERTICAL_ANGLE - MIN_VERTICAL_ANGLE);
+          const clampedAngle = Math.max(0, Math.min(1, normalizedVerticalAngle));
+          
+          // When looking up (higher angle), zoom in to prevent clipping
+          // When looking down (lower angle), use normal distance
+          const dynamicZoomFactor = clampedAngle * ZOOM_FACTOR;
+          const dynamicDistance = cameraDistance.current - (cameraDistance.current - MIN_DYNAMIC_DISTANCE) * dynamicZoomFactor;
+          
+          // Calculate camera position based on dynamic distance and vertical angle
           const cameraOffset = new Vector3();
           
-          // Calculate camera position behind character based on rotation
-          cameraOffset.x = -Math.sin(container.current.rotation.y) * CAMERA_DISTANCE;
-          cameraOffset.z = -Math.cos(container.current.rotation.y) * CAMERA_DISTANCE;
+          // Calculate horizontal distance based on vertical angle and dynamic zoom
+          const horizontalDistance = dynamicDistance * Math.cos(cameraVerticalAngle.current);
+          const verticalOffset = dynamicDistance * Math.sin(cameraVerticalAngle.current);
           
-          // Set fixed height above character
-          cameraOffset.y = CAMERA_HEIGHT;
+          // Calculate camera position behind character based on rotation and vertical angle
+          cameraOffset.x = -Math.sin(container.current.rotation.y) * horizontalDistance;
+          cameraOffset.z = -Math.cos(container.current.rotation.y) * horizontalDistance;
+          
+          // Set height based on vertical angle and base camera height
+          cameraOffset.y = CAMERA_HEIGHT + verticalOffset;
           
           // Set the camera position target
           cameraWorldPosition.current.copy(characterPos).add(cameraOffset);
@@ -666,11 +722,10 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
           cameraLookAt.current.lerp(lookTarget, fixedLerpFactor);
           state.camera.lookAt(cameraLookAt.current);
           
-          // Debug camera position
-          if (Math.random() < 0.005) {
+          // Debug camera position (reduced frequency)
+          if (Math.random() < 0.002) {
+            console.log(`[CharacterController] Camera distance: ${cameraDistance.current.toFixed(2)}, Dynamic distance: ${dynamicDistance.toFixed(2)}, Vertical angle: ${(cameraVerticalAngle.current * 180 / Math.PI).toFixed(1)}°`);
             console.log(`[CharacterController] Camera position: ${state.camera.position.x.toFixed(2)}, ${state.camera.position.y.toFixed(2)}, ${state.camera.position.z.toFixed(2)}`);
-            console.log(`[CharacterController] Character position: ${characterPos.x.toFixed(2)}, ${characterPos.y.toFixed(2)}, ${characterPos.z.toFixed(2)}`);
-            console.log(`[CharacterController] Camera distance: ${state.camera.position.distanceTo(characterPos).toFixed(2)}`);
           }
         }
       }
@@ -750,6 +805,191 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     
     return () => clearInterval(physicsLoop);
   }, []);
+
+  // Third-person pointer lock controls
+  useEffect(() => {
+    if (isFirstPerson) return; // Only for third-person mode
+    
+    const canvas = gl.domElement;
+    
+    const handlePointerLockChange = () => {
+      const isLocked = document.pointerLockElement === canvas;
+      setIsThirdPersonPointerLocked(isLocked);
+      
+      if (isLocked) {
+        canvas.style.cursor = 'none';
+        console.log('[CharacterController] Third-person pointer lock activated');
+      } else {
+        canvas.style.cursor = 'default';
+        console.log('[CharacterController] Third-person pointer lock released');
+      }
+    };
+    
+    const handleMouseMove = (event) => {
+      if (document.pointerLockElement === canvas && !isFirstPerson) {
+        // Apply sensitivity to control rotation speed
+        const sensitivity = 0.002;
+        
+        // Horizontal rotation (around Y axis)
+        thirdPersonMouseRotation.current.y -= event.movementX * sensitivity;
+        rotationTarget.current = thirdPersonMouseRotation.current.y;
+        
+        // Vertical rotation with limits (inverted: mouse up = look down, mouse down = look up)
+        thirdPersonMouseRotation.current.x += event.movementY * sensitivity;
+        thirdPersonMouseRotation.current.x = Math.max(
+          MIN_VERTICAL_ANGLE, 
+          Math.min(MAX_VERTICAL_ANGLE, thirdPersonMouseRotation.current.x)
+        );
+        cameraVerticalAngle.current = thirdPersonMouseRotation.current.x;
+      }
+    };
+    
+    const handleClick = () => {
+      if (!isFirstPerson && document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock();
+      }
+    };
+    
+    const handleKeyDown = (event) => {
+      // ESC key to release pointer lock
+      if (event.key === 'Escape' && document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+      }
+    };
+    
+    // Touch events for mobile pinch-to-zoom (keep these for mobile support)
+    const handleTouchStart = (event) => {
+      if (!isFirstPerson && event.touches.length === 2) {
+        const touch1 = event.touches[0];
+        const touch2 = event.touches[1];
+        const distance = Math.sqrt(
+          Math.pow(touch2.clientX - touch1.clientX, 2) + 
+          Math.pow(touch2.clientY - touch1.clientY, 2)
+        );
+        lastTouchDistance.current = distance;
+      }
+    };
+    
+    const handleTouchMove = (event) => {
+      if (!isFirstPerson && event.touches.length === 2) {
+        event.preventDefault();
+        const touch1 = event.touches[0];
+        const touch2 = event.touches[1];
+        const distance = Math.sqrt(
+          Math.pow(touch2.clientX - touch1.clientX, 2) + 
+          Math.pow(touch2.clientY - touch1.clientY, 2)
+        );
+        
+        if (lastTouchDistance.current > 0) {
+          const zoomDelta = (lastTouchDistance.current - distance) * 0.01 * ZOOM_SPEED;
+          cameraDistance.current = Math.max(
+            MIN_CAMERA_DISTANCE,
+            Math.min(MAX_CAMERA_DISTANCE, cameraDistance.current + zoomDelta)
+          );
+        }
+        
+        lastTouchDistance.current = distance;
+      }
+    };
+    
+    const handleTouchEnd = () => {
+      lastTouchDistance.current = 0;
+    };
+    
+    // Mouse wheel zoom (keep this for desktop)
+    const handleWheel = (event) => {
+      if (!isFirstPerson) {
+        event.preventDefault();
+        const zoomDelta = event.deltaY * 0.001 * ZOOM_SPEED;
+        cameraDistance.current = Math.max(
+          MIN_CAMERA_DISTANCE,
+          Math.min(MAX_CAMERA_DISTANCE, cameraDistance.current + zoomDelta)
+        );
+      }
+    };
+    
+    // Add event listeners
+    canvas.addEventListener('click', handleClick);
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('keydown', handleKeyDown);
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd);
+    
+    // Cleanup function
+    return () => {
+      canvas.removeEventListener('click', handleClick);
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('keydown', handleKeyDown);
+      canvas.removeEventListener('wheel', handleWheel);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
+      
+      // Exit pointer lock when component unmounts or mode changes
+      if (document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+      }
+    };
+  }, [isFirstPerson, gl]);
+
+  // Pointer lock controls for first-person mode
+  useEffect(() => {
+    if (!isFirstPerson) return;
+    
+    const canvas = gl.domElement;
+    
+    const handlePointerLockChange = () => {
+      setIsPointerLocked(document.pointerLockElement === canvas);
+    };
+    
+    const handleMouseMove = (event) => {
+      if (document.pointerLockElement === canvas) {
+        // Apply a sensitivity factor to control rotation speed
+        const sensitivity = 0.002;
+        mouseRotation.current.y -= event.movementX * sensitivity;
+        mouseRotation.current.x += event.movementY * sensitivity; // Inverted: mouse up = look down, mouse down = look up
+        
+        // Clamp vertical rotation to prevent camera flipping and looking below ground
+        mouseRotation.current.x = Math.max(-Math.PI / 12, Math.min(Math.PI / 2.2, mouseRotation.current.x));
+      }
+    };
+    
+    const handleClick = () => {
+      if (isFirstPerson && document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock();
+      }
+    };
+    
+    const handleKeyDown = (event) => {
+      // ESC key to release pointer lock
+      if (event.key === 'Escape' && document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+      }
+    };
+    
+    // Add event listeners
+    canvas.addEventListener('click', handleClick);
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Cleanup function
+    return () => {
+      canvas.removeEventListener('click', handleClick);
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('keydown', handleKeyDown);
+      
+      // Exit pointer lock when component unmounts or first-person mode is disabled
+      if (document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+      }
+    };
+  }, [isFirstPerson, gl]);
 
   return (
     <RigidBody
@@ -932,6 +1172,45 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
               <VoiceActivityIndicator playerId={myId} position={currentPosition.current} />
             </group>
           </>
+        )}
+        
+        {/* Pointer lock indicator for third-person mode */}
+        {!isFirstPerson && isThirdPersonPointerLocked && (
+          <Html position={[0, 3, 0]} center>
+            <div style={{
+              background: 'rgba(0, 0, 0, 0.8)',
+              color: 'white',
+              padding: '8px 12px',
+              borderRadius: '4px',
+              fontSize: '14px',
+              fontFamily: 'Arial, sans-serif',
+              textAlign: 'center',
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap'
+            }}>
+              🎮 Mouse Look Active - Press ESC to release
+            </div>
+          </Html>
+        )}
+        
+        {/* Click to activate indicator for third-person mode */}
+        {!isFirstPerson && !isThirdPersonPointerLocked && (
+          <Html position={[0, 3, 0]} center>
+            <div style={{
+              background: 'rgba(0, 0, 0, 0.6)',
+              color: 'white',
+              padding: '6px 10px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              fontFamily: 'Arial, sans-serif',
+              textAlign: 'center',
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap',
+              opacity: 0.7
+            }}>
+              Click to activate mouse look
+            </div>
+          </Html>
         )}
       </group>
       <CapsuleCollider args={[0.3, 0.3]} position={[0, 0.8 + VERTICAL_OFFSET, 0]} />

@@ -154,8 +154,6 @@ function GameElements3D() {
       // Change color and opacity based on game state
       const zoneColor = isGameActive ? '#CCCCCC' : '#00FF00';
       const zoneOpacity = isGameActive ? 0.08 : 0.3; // Much more transparent when disabled
-      
-      console.log(`[GameElements3D] Rendering join zone for ${gameType}, active: ${isGameActive}`);
 
       // Cylinder properties
       const cylinderHeight = 10;

@@ -100,7 +100,7 @@ export default function JumpPad({ position = [0, 0, 0], baseForce = { x: 0, y: 7
                 localPlayerRigidBody.setLinvel(finalForce, true);
                 
                 // Visual feedback - make the jump pad glow briefly
-                if (jumpPadRef.current) {
+                if (jumpPadRef.current && jumpPadRef.current.children && jumpPadRef.current.children.length > 1) {
                   const mesh = jumpPadRef.current.children[1]; // Target the green pad (second child)
                   if (mesh && mesh.material) {
                     const originalEmissive = mesh.material.emissive.clone();
