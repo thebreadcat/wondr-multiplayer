@@ -86,6 +86,7 @@ export default function RemotePlayer({ player }) {
       linearDamping={12} // Increased damping to reduce sliding
       angularDamping={0.5}
       mass={1}
+      userData={{ type: 'player', id: id }}
     >
       <group rotation-y={rotation}>
         <Character color={color} animation={animation} />

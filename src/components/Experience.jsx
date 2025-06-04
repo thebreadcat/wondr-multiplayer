@@ -12,6 +12,8 @@ import RemotePlayer from "./RemotePlayer";
 import { GameSystemContext } from "./GameSystemProvider";
 import TagGameRefactored from "../games/tag/TagGameRefactored";
 import { RaceGame3D } from "../games/race";
+import JumpPad from "./JumpPad";
+import Portal from "./Portal";
 
 const maps = {
   castle_on_hills: {
@@ -177,6 +179,24 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
             <GameElements3D />
             {/* Race Game 3D Elements - inside Physics! */}
             {showRaceGame && <RaceGame3D roomId={sharedRoomId} />}
+            
+            {/* Jump Pads for Tag Game */}
+            <JumpPad position={[7.84, 0.18, -2.22]} />
+            <JumpPad position={[-4.22, -0.82, -11.37]} mini={true} />
+            <JumpPad position={[-10.95, 0.18, -16.17]} mini={true} />
+            <JumpPad position={[17.12, -0.82, -13.14]} mini={true} />
+            <JumpPad position={[8.17, 0.18, -13.34]} mini={true} />
+            <JumpPad position={[-1.45, 1.18, -16.53]} />
+            <JumpPad position={[14.88, -0.82, -0.01]} mini={true} />
+            
+            {/* Portal Pair for Tag Game */}
+            <Portal 
+              portalA={[-9.39, -0.82, 3.05]} 
+              portalB={[15.76, 1.18, -29.7]} 
+              rotationA={[0, 0, 0]} // Back to original orientation (no rotation)
+              rotationB={[0, -Math.PI / 2, 0]} // Face west (-90 degrees Y rotation)
+              radius={1.2}
+            />
           </>
         ) : (
           <>
@@ -198,6 +218,24 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
             <GameElements3D />
             {/* Race Game 3D Elements - inside Physics! */}
             {showRaceGame && <RaceGame3D roomId={sharedRoomId} />}
+            
+            {/* Jump Pads for Normal Game */}
+            <JumpPad position={[7.84, 0.18, -2.22]} />
+            <JumpPad position={[-4.22, -0.82, -11.37]} mini={true} />
+            <JumpPad position={[-10.95, 0.18, -16.17]} mini={true} />
+            <JumpPad position={[17.12, -0.82, -13.14]} mini={true} />
+            <JumpPad position={[8.17, 0.18, -13.34]} mini={true} />
+            <JumpPad position={[-1.45, 1.18, -16.53]} />
+            <JumpPad position={[14.88, -0.82, -0.01]} mini={true} />
+            
+            {/* Portal Pair for Normal Game */}
+            <Portal 
+              portalA={[-9.39, -0.82, 3.05]} 
+              portalB={[15.76, 1.18, -29.7]} 
+              rotationA={[0, 0, 0]} // Back to original orientation (no rotation)
+              rotationB={[0, -Math.PI / 2, 0]} // Face west (-90 degrees Y rotation)
+              radius={1.2}
+            />
           </>
         )}
       </Physics>

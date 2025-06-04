@@ -12,6 +12,7 @@ import VoiceChatControls from './components/VoiceChatControls';
 import { GameSystemProvider } from './components/GameSystemProvider';
 import { PlayerList } from './components/PlayerList';
 import { StatsMonitor } from './components/StatsMonitor';
+import { CoordinatesDisplay } from './components/CoordinatesDisplay';
 import { RaceGame3D, RaceGameUI } from './games/race';
 import RaceBuilderUI from './games/race/components/RaceBuilderUI';
 import RaceHUD from './games/race/RaceHUD';
@@ -274,6 +275,7 @@ function App() {
             {showRaceGame && <RaceGameUI />}
           </div>
           <StatsMonitor />
+          <CoordinatesDisplay />
           {showCreator && (
             <CharacterCreator
               initialColor={characterColor}

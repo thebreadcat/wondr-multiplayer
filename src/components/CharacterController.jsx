@@ -762,6 +762,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       linearDamping={0.95} // Add damping for smoother physics
       angularDamping={0.95}
       name="player" // Add name property for join zone detection
+      userData={{ type: 'player', id: myId }} // Add userData for jump pad detection
       onCollisionEnter={({ other }) => {
         const otherId = other.rigidBodyObject?.userData?.id;
         const otherType = other.rigidBodyObject?.userData?.type;
