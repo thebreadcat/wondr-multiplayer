@@ -16,4 +16,11 @@
   animation: float 3s ease-in-out infinite;
   text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
   user-select: none;
+}
+
+.voiceChatIndicator {
+  pointer-events: none;
+  animation: float 3s ease-in-out infinite;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+  user-select: none;
 } 

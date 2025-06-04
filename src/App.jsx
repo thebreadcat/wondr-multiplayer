@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { isMobile, VirtualJoystick, MobileButtons } from "./components/MobileControls";
 import { KeyboardControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
@@ -81,6 +81,10 @@ function App() {
   const [showPhoneMenu, setShowPhoneMenu] = useState(false);
   const [showSkateboard, setShowSkateboard] = useState(false);
   
+  // Idle state management
+  const [idle, setIdle] = useState(false);
+  const lastActiveTimeRef = useRef(Date.now());
+  
   // Mobile controls state
   const isMobileDevice = useMemo(() => isMobile(), []);
   const [mobileRunning, setMobileRunning] = useState(false);
@@ -123,6 +127,46 @@ function App() {
       delete window.hideRaceBuilderPanel;
     };
   }, []);
+
+  // Idle state management effects
+  useEffect(() => {
+    const idleCheck = setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastActivity = now - lastActiveTimeRef.current;
+      
+      // Set to idle after 5 minutes of inactivity
+      if (timeSinceLastActivity > 5 * 60 * 1000) {
+        setIdle(true);
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(idleCheck);
+  }, []);
+
+  // Reset idle timer on user activity
+  useEffect(() => {
+    const resetIdleTimer = () => {
+      lastActiveTimeRef.current = Date.now();
+      setIdle(false);
+    };
+
+    // Listen for various user activity events
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    events.forEach(event => {
+      document.addEventListener(event, resetIdleTimer, true);
+    });
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, resetIdleTimer, true);
+      });
+    };
+  }, []);
+
+  const handleReconnect = () => {
+    lastActiveTimeRef.current = Date.now();
+    setIdle(false);
+  };
 
   useEffect(() => {
     const cookieColor = getCookie('characterColor');
@@ -289,6 +333,49 @@ function App() {
               onSave={handleSaveColor}
               onCancel={handleCancel}
             />
+          )}
+          
+          {/* Idle overlay - rendered outside Canvas to avoid 3D transforms */}
+          {idle && (
+            <div style={{ 
+              position: 'fixed', 
+              top: 0, 
+              left: 0, 
+              bottom: 0, 
+              right: 0, 
+              width: '100vw', 
+              height: '100vh', 
+              backgroundColor: 'rgba(0,0,0,0.5)', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              pointerEvents: 'auto',
+              zIndex: 10000 // Higher than other overlays
+            }}>
+              <div style={{ 
+                backgroundColor: 'white', 
+                padding: '20px', 
+                borderRadius: '8px', 
+                textAlign: 'center',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+              }}>
+                <p>You have been idle for a while.</p>
+                <button 
+                  onClick={handleReconnect}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: '#2980b9',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Reconnect
+                </button>
+              </div>
+            </div>
           )}
         </GameSystemProvider>
       </VoiceChatProvider>

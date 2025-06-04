@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Character } from './Character';
+import { PlayerSkateboard } from './Skateboard';
 import { Html } from '@react-three/drei';
 import { useMultiplayer } from './MultiplayerProvider';
 import { useGameSystem } from './GameSystemProvider';
@@ -8,20 +9,26 @@ import { Vector3, MathUtils } from 'three';
 import styles from './RemotePlayer.module.css';
 import { RigidBody } from '@react-three/rapier';
 import TagPlayerIndicator from '../games/tag/TagPlayerIndicator';
-import VoiceActivityIndicator from './VoiceActivityIndicator';
+import { useVoiceChat } from './VoiceChatProvider';
 
 export default function RemotePlayer({ player }) {
   // Always ensure animation is set to idle as fallback
-  const { color, rotation = 0, id } = player;
+  const { color, rotation = 0, id, showSkateboard = false } = player;
   const animation = player.animation || 'idle';
   const { emojis } = useMultiplayer();
+  const { isVoiceChatEnabled, voiceActivity, connectionStatus } = useVoiceChat();
   const characterRef = useRef();
   const defaultPosition = [0, 2, 0];
   
-  // Log remote player initialization
+  // Log remote player initialization and skateboard state changes
   useEffect(() => {
-    console.log(`[RemotePlayer] Initializing player ${id} with animation: ${animation}`);
+    console.log(`[RemotePlayer] Initializing player ${id} with animation: ${animation}, skateboard: ${showSkateboard}`);
   }, []);
+
+  // Log when skateboard state changes
+  useEffect(() => {
+    console.log(`[RemotePlayer] Player ${id} skateboard state changed to: ${showSkateboard}`);
+  }, [showSkateboard, id]);
 
   // Update physics position when network data arrives
   useEffect(() => {
@@ -90,6 +97,19 @@ export default function RemotePlayer({ player }) {
     >
       <group rotation-y={rotation}>
         <Character color={color} animation={animation} />
+        
+        {/* Add skateboard under the remote player's feet if enabled */}
+        {showSkateboard && (
+          <group
+            position={[0, animation.includes('jump') ? -0.02 : -0.038, 0]} // Change vertical position based on jump state
+          >
+            <PlayerSkateboard 
+              scale={0.0055} 
+              position={[0, 0, 0]} // Position relative to the parent group
+              rotation={[0, rotation, 0]}
+            />
+          </group>
+        )}
       </group>
       {/* Player emoji */}
       {emojis[id]?.value && (
@@ -104,11 +124,29 @@ export default function RemotePlayer({ player }) {
         </Html>
       )}
       
+      {/* Voice chat indicator */}
+      {isVoiceChatEnabled && connectionStatus[id] === 'connected' && (
+        <Html position={[0, 0.8, 0]} center distanceFactor={8}>
+          <div 
+            className={styles.voiceChatIndicator}
+            style={{
+              fontSize: '0.6em', // 1/4 the size of emoji (2em * 0.3 = 0.6em)
+              opacity: voiceActivity[id] ? 1 : 0.7,
+              transform: voiceActivity[id] ? 'scale(3.07664)' : 'scale(3.07664)',
+              transition: 'all 0.2s ease',
+              filter: voiceActivity[id] ? 'drop-shadow(0 0 3px #4CAF50)' : 'none'
+            }}
+          >
+            🔊
+          </div>
+        </Html>
+      )}
+      
       {/* Tag game indicator - red for IT, blue for players */}
       <TagPlayerIndicator playerId={id} />
       
       {/* Voice activity indicator */}
-      <VoiceActivityIndicator playerId={id} position={currentPosition} />
+      {/* Removed VoiceActivityIndicator to eliminate floating circle */}
     </RigidBody>
   );
 } 

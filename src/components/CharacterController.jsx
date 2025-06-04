@@ -10,9 +10,9 @@ import { useMultiplayer } from "./MultiplayerProvider";
 import { useGameSystem } from "./GameSystemProvider";
 import styles from "./RemotePlayer.module.css";
 import TagPlayerIndicator from "../games/tag/TagPlayerIndicator";
-import VoiceActivityIndicator from "./VoiceActivityIndicator";
 import { handleGameCollision } from "../utils/handleGameCollision";
 import { useCameraStore } from "./CameraToggleButton";
+import { useVoiceChat } from "./VoiceChatProvider";
 
 // Throttle function to limit how often a function gets called
 const throttle = (callback, delay) => {
@@ -89,6 +89,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
   const [, getKeys] = useKeyboardControls();
   const { sendMove, sendEmoji, emoji, myId, emojis } = useMultiplayer();
   const { activeGames } = useGameSystem();
+  const { isVoiceChatEnabled, voiceActivity, connectionStatus } = useVoiceChat();
   
   // Define state variables first
   const [isOnGround, setIsOnGround] = useState(true); // Start as on ground
@@ -186,6 +187,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       rotation: 0,
       animation: 'idle',
       color: characterColor,
+      showSkateboard: showSkateboard,
     });
     
     // Clean up timers on unmount
@@ -276,6 +278,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
             rotation: characterRotationTarget.current,
             animation: 'idle',
             color: characterColor,
+            showSkateboard: showSkateboard,
           });
         }
       }
@@ -314,6 +317,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
             rotation: characterRotationTarget.current,
             animation: newAnimState,
             color: characterColor,
+            showSkateboard: showSkateboard,
           });
         }
       } else if (!isMoving && animationState !== 'idle' && 
@@ -329,6 +333,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
           rotation: characterRotationTarget.current,
           animation: 'idle',
           color: characterColor,
+          showSkateboard: showSkateboard,
         });
       }
     }
@@ -533,6 +538,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
             rotation: characterRotationTarget.current,
             animation: newAnimState,
             color: characterColor,
+            showSkateboard: showSkateboard,
           });
         }
       }
@@ -556,6 +562,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
             rotation: characterRotationTarget.current,
             animation: "idle",
             color: characterColor,
+            showSkateboard: showSkateboard,
           });
         }
       } else if (isOnGround && isMoving) {
@@ -573,6 +580,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
             rotation: characterRotationTarget.current,
             animation: newAnimState,
             color: characterColor,
+            showSkateboard: showSkateboard,
           });
         }
       }
@@ -609,6 +617,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
         rotation: characterRotationTarget.current,
         animation: "jump_up",
         color: characterColor,
+        showSkateboard: showSkateboard,
       });
       
       console.log('[CharacterController] Starting jump animation');
@@ -629,6 +638,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
             rotation: characterRotationTarget.current,
             animation: "idle",
             color: characterColor,
+            showSkateboard: showSkateboard,
           });
         }
         jumpAnimationTimer.current = null;
@@ -670,7 +680,13 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
         rotation: characterRotationTarget.current,
         animation: animationState,
         color: characterColor,
+        showSkateboard: showSkateboard,
       });
+      
+      // Log skateboard state transmission occasionally
+      if (Math.random() < 0.01) { // 1% chance to log
+        console.log(`[CharacterController] Sending skateboard state: ${showSkateboard}`);
+      }
     }
 
     // Calculate movement speed for camera adjustments
@@ -873,6 +889,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
         position: adjustedInitialPosition,
         animation: 'idle',
         rotation: characterRotationTarget.current,
+        showSkateboard: showSkateboard,
       });
       
       setLocalPosition(adjustedInitialPosition);
@@ -1297,6 +1314,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
               rotation: characterRotationTarget.current,
               animation: 'idle',
               color: characterColor,
+              showSkateboard: showSkateboard,
             });
             
             // Reset the wasInAir flag
@@ -1328,6 +1346,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
                     rotation: characterRotationTarget.current,
                     animation: newAnimState,
                     color: characterColor,
+                    showSkateboard: showSkateboard,
                   });
                 }
               }, 100); // Shorter delay for more responsive animation
@@ -1355,6 +1374,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
                     rotation: characterRotationTarget.current,
                     animation: newAnimState,
                     color: characterColor,
+                    showSkateboard: showSkateboard,
                   });
                 }
               }, 300); // Longer delay as a backup check
@@ -1425,10 +1445,26 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
                   <div className={styles.emojiContainer}>{emoji}</div>
                 </Html>
               )}
-              <TagPlayerIndicator playerId={myId} />
               
-              {/* Voice activity indicator for local player */}
-              <VoiceActivityIndicator playerId={myId} position={currentPosition.current} />
+              {/* Voice chat indicator */}
+              {isVoiceChatEnabled && Object.values(connectionStatus).some(status => status === 'connected') && (
+                <Html position={[0, 0.8 + VERTICAL_OFFSET, 0]} center distanceFactor={8}>
+                  <div 
+                    className={styles.voiceChatIndicator}
+                    style={{
+                      fontSize: '0.6em', // 1/4 the size of emoji (2em * 0.3 = 0.6em)
+                      opacity: voiceActivity[myId] ? 1 : 0.7,
+                      transform: voiceActivity[myId] ? 'scale(3.07664)' : 'scale(3.07664)',
+                      transition: 'all 0.2s ease',
+                      filter: voiceActivity[myId] ? 'drop-shadow(0 0 3px #4CAF50)' : 'none'
+                    }}
+                  >
+                    🔊
+                  </div>
+                </Html>
+              )}
+              
+              <TagPlayerIndicator playerId={myId} />
             </group>
           </>
         )}

@@ -77,8 +77,7 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
   const shadowCameraRef = useRef();
   const map = "animal_crossing_map";
   const [localPosition, setLocalPosition] = useState(defaultPosition);
-  const [idle, setIdle] = useState(false);
-  const lastActiveTimeRef = useRef(Date.now());
+  // Idle state management moved to App.jsx to avoid 3D transforms on overlay
   
   // Find active tag game if any exists - look for games that start with 'tag'
   // Make sure game is an object with properties, not just a string
@@ -93,27 +92,6 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
     return (game.gameType === 'tag' || roomId.startsWith('tag')) && 
            game.state === 'playing';
   });
-
-  // Reset idle timer whenever position changes
-  useEffect(() => {
-    lastActiveTimeRef.current = Date.now();
-    setIdle(false);
-  }, [localPosition]);
-
-  // Check for idle state
-  useEffect(() => {
-    const idleCheck = setInterval(() => {
-      const now = Date.now();
-      const timeSinceLastActivity = now - lastActiveTimeRef.current;
-      
-      // Set to idle after 5 minutes of inactivity
-      if (timeSinceLastActivity > 5 * 60 * 1000) {
-        setIdle(true);
-      }
-    }, 10000); // Check every 10 seconds
-
-    return () => clearInterval(idleCheck);
-  }, []);
 
   // Add emoji keyboard shortcuts
   useEffect(() => {
@@ -135,13 +113,6 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
     return () => window.removeEventListener('keypress', handleKeyPress);
   }, [sendEmoji]);
 
-  const handleReconnect = () => {
-    lastActiveTimeRef.current = Date.now();
-    setIdle(false);
-  };
-  
-  // Mobile control handlers moved to App.jsx
-
   return (
     <>
       <Environment preset="sunset" />
@@ -162,8 +133,7 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
           attach={"shadow-camera"}
         />
       </directionalLight>
-      {!idle && (
-        <Physics>
+      <Physics>
         {/* CRITICAL FIX: Only show tag game if player is actually in it */}
         {activeTagGame && activeTagGame[1]?.players?.includes(myId) ? (
           <>
@@ -239,18 +209,6 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
           </>
         )}
       </Physics>
-      )}
-      {idle && (
-        <Html fullscreen>
-          <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, right: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'auto' }}>
-            <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
-              <p>You have been idle for a while.</p>
-              <button onClick={handleReconnect}>Reconnect</button>
-            </div>
-          </div>
-        </Html>
-      )}
-      {/* Mobile controls moved to App.jsx to render outside Canvas */}
     </>
   );
 });

@@ -151,6 +151,7 @@ io.on('connection', (socket) => {
       emoji: null,
       emojiTimestamp: null,
       animation: data.animation || 'idle',
+      showSkateboard: data.showSkateboard || false,
     };
     io.emit('player-joined', players[socket.id]);
     setTimeout(() => io.emit('players', players), 100);
@@ -161,6 +162,7 @@ io.on('connection', (socket) => {
       players[socket.id].position = data.position;
       if (data.animation) players[socket.id].animation = data.animation;
       if (typeof data.rotation === 'number') players[socket.id].rotation = data.rotation;
+      if (typeof data.showSkateboard === 'boolean') players[socket.id].showSkateboard = data.showSkateboard;
       
       // Update player position in the spatial grid
       worldGrid.updateEntity(socket.id, data.position);

@@ -289,7 +289,8 @@ export function MultiplayerProvider({ characterColor, position, children }) {
           if (!newState[playerId]) return;
           newState[playerId] = {
             ...newState[playerId],
-            animation: newState[playerId].animation || 'idle'
+            animation: newState[playerId].animation || 'idle',
+            showSkateboard: newState[playerId].showSkateboard || false
           };
         });
 
@@ -325,7 +326,8 @@ export function MultiplayerProvider({ characterColor, position, children }) {
           ...prev,
           [player.id]: {
             ...player,
-            animation: 'idle'
+            animation: 'idle',
+            showSkateboard: player.showSkateboard || false
           }
         };
       });
@@ -343,7 +345,7 @@ export function MultiplayerProvider({ characterColor, position, children }) {
       }
     });
 
-    socket.on('player-moved', ({ id, position, animation, rotation }) => {
+    socket.on('player-moved', ({ id, position, animation, rotation, showSkateboard }) => {
       if (id === socket.id) return;
       
       // Set target for interpolation
@@ -378,7 +380,9 @@ export function MultiplayerProvider({ characterColor, position, children }) {
             animation: animation || prev[id].animation || 'idle',
             // Store target position and rotation for interpolation
             ...(position ? { targetPosition: position } : {}),
-            ...(rotation !== undefined ? { targetRotation: rotation } : {})
+            ...(rotation !== undefined ? { targetRotation: rotation } : {}),
+            // Update skateboard state
+            ...(typeof showSkateboard === 'boolean' ? { showSkateboard } : {})
           }
         };
       });
