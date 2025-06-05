@@ -154,7 +154,7 @@ export function MultiplayerProvider({ characterColor, position, children }) {
       console.log('[MultiplayerProvider] Using VITE_SERVER_URL:', serverUrl);
     } else if (!isDeployed && import.meta.env.DEV) {
       // Only use localhost if we're actually running on localhost in dev mode
-      serverUrl = 'http://localhost:3006';
+      serverUrl = 'https://thefishnfts.com';
       console.log('[MultiplayerProvider] Development mode on localhost, using localhost:', serverUrl);
     } else {
       // For any deployed environment, always use the live server

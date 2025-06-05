@@ -99,6 +99,11 @@ export default function JumpPad({ position = [0, 0, 0], baseForce = { x: 0, y: 7
                 // Apply the launch force
                 localPlayerRigidBody.setLinvel(finalForce, true);
                 
+                // Notify the character controller about the jump pad effect
+                if (window.jumpPadControls && window.jumpPadControls.notifyJumpPadEffect) {
+                  window.jumpPadControls.notifyJumpPadEffect(myId);
+                }
+                
                 // Visual feedback - make the jump pad glow briefly
                 if (jumpPadRef.current && jumpPadRef.current.children && jumpPadRef.current.children.length > 1) {
                   const mesh = jumpPadRef.current.children[1]; // Target the green pad (second child)

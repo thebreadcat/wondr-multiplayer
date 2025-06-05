@@ -99,6 +99,11 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
   const lastGroundCheckTime = useRef(0);
   const groundCheckInterval = useRef(300); // Check every 300ms
   
+  // Jump pad effect tracking
+  const [isAffectedByJumpPad, setIsAffectedByJumpPad] = useState(false);
+  const isAffectedByJumpPadRef = useRef(false); // Immediate ref for synchronous checks
+  const jumpPadEffectTimer = useRef(null);
+  
   // Create throttled sendMove function to limit network traffic
   const throttledSendMove = useMemo(
     () => throttle((data) => {
@@ -286,7 +291,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     
     // Check if we need to reset animation state
     // This handles cases where the character is moving but stuck in a non-movement animation
-    if (!keys.jump) { // Check regardless of isOnGround status to be safe
+    if (!keys.jump && !isAffectedByJumpPad) { // Don't override jump pad animations
       const velocity = rigidBody.current.linvel();
       const isMoving = Math.abs(velocity.x) > 0.1 || Math.abs(velocity.z) > 0.1;
       
@@ -321,8 +326,8 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
           });
         }
       } else if (!isMoving && animationState !== 'idle' && 
-                animationState !== 'wave' && !animationState.includes('jump')) {
-        // Character is stopped but not in idle animation, fix it
+                animationState !== 'wave' && !animationState.includes('jump') && animationState !== 'fall') {
+        // Character is stopped but not in idle animation, fix it (but don't override fall animation)
         console.log(`[CharacterController] Fixing animation: Character is stopped but in ${animationState} animation, resetting to idle`);
         
         setAnimationState('idle');
@@ -525,8 +530,8 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       velocity.x = movement.x * currentSpeed;
       velocity.z = movement.z * currentSpeed;
       
-      // Set animation state based on skateboard status
-      if (isOnGround) {
+      // Set animation state based on skateboard status (but don't override jump pad animations)
+      if (isOnGround && !isAffectedByJumpPad) {
         const newAnimState = showSkateboard ? "walk" : (currentSpeed === RUN_SPEED ? "run" : "walk");
         if (animationState !== newAnimState) {
           console.log(`[CharacterController] Setting animation to ${newAnimState} from ${animationState}`);
@@ -550,8 +555,8 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       // Check if we're actually moving (not just from momentum) before setting idle
       const isMoving = Math.abs(velocity.x) > 0.1 || Math.abs(velocity.z) > 0.1;
       
-      if (isOnGround && !isMoving) {
-        // Set to idle if we're truly stopped
+      if (isOnGround && !isMoving && !isAffectedByJumpPad) {
+        // Set to idle if we're truly stopped (but don't override jump pad animations)
         if (animationState !== "idle") {
           console.log(`[CharacterController] Setting animation to idle from ${animationState}`);
           setAnimationState("idle");
@@ -565,8 +570,8 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
             showSkateboard: showSkateboard,
           });
         }
-      } else if (isOnGround && isMoving) {
-        // We're still moving from momentum, keep the walk animation
+      } else if (isOnGround && isMoving && !isAffectedByJumpPad) {
+        // We're still moving from momentum, keep the walk animation (but don't override jump pad animations)
         const movementSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         const newAnimState = showSkateboard ? "walk" : (movementSpeed > 4 ? "run" : "walk");
         
@@ -597,7 +602,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     }
 
     // Handle jump with cooldown instead of ground check
-    if (combinedIsJumping && !wasJumpPressed.current && jumpCooldown.current <= 0) {
+    if (combinedIsJumping && !wasJumpPressed.current && jumpCooldown.current <= 0 && !isAffectedByJumpPad && !isAffectedByJumpPadRef.current) {
       velocity.y = jumpVelocity;
       jumpCooldown.current = totalJumpTime;
       jumpInProgress.current = true;
@@ -608,17 +613,20 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
         jumpAnimationTimer.current = null;
       }
       
-      // Set jump animation immediately
+      // Set jump_up animation for regular jump
       setAnimationState("jump_up");
+      console.log('[CharacterController] Regular jump: Setting animation to jump_up');
       
-      // Force immediate network update for animation change
-      sendMove({
-        position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
-        rotation: characterRotationTarget.current,
-        animation: "jump_up",
-        color: characterColor,
-        showSkateboard: showSkateboard,
-      });
+      // Send network update for regular jump
+      if (rigidBody.current) {
+        sendMove({
+          position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+          rotation: characterRotationTarget.current,
+          animation: "jump_up",
+          color: characterColor,
+          showSkateboard: showSkateboard,
+        });
+      }
       
       console.log('[CharacterController] Starting jump animation');
       
@@ -643,6 +651,9 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
         }
         jumpAnimationTimer.current = null;
       }, 1500); // 1.5 second safety timer
+    } else if (combinedIsJumping && !wasJumpPressed.current && (isAffectedByJumpPad || isAffectedByJumpPadRef.current)) {
+      // Log when jump is prevented due to jump pad effect
+      console.log('[CharacterController] Jump prevented - affected by jump pad');
     }
     wasJumpPressed.current = combinedIsJumping;
 
@@ -893,6 +904,20 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       });
       
       setLocalPosition(adjustedInitialPosition);
+      
+      // Reset the wasInAir flag
+      wasInAir.current = false;
+      
+      // Clear jump pad effect if we were affected by one
+      if (isAffectedByJumpPad) {
+        setIsAffectedByJumpPad(false);
+        isAffectedByJumpPadRef.current = false; // Clear ref as well
+        if (jumpPadEffectTimer.current) {
+          clearTimeout(jumpPadEffectTimer.current);
+          jumpPadEffectTimer.current = null;
+        }
+      }
+      
       return;
     }
   });
@@ -942,13 +967,61 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       }
     };
     
+    // Create global jump pad interface
+    window.jumpPadControls = {
+      notifyJumpPadEffect: (playerId) => {
+        if (playerId === myId) {
+          console.log('[CharacterController] Jump pad effect triggered for player:', playerId);
+          setIsAffectedByJumpPad(true);
+          isAffectedByJumpPadRef.current = true; // Set ref immediately for synchronous checks
+          
+          // Set fall animation for jump pad effect
+          setAnimationState("fall");
+          console.log('[CharacterController] Jump pad effect: Setting animation to fall');
+          
+          // Send network update with jump pad effect
+          if (rigidBody.current) {
+            sendMove({
+              position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+              rotation: characterRotationTarget.current,
+              animation: "fall",
+              color: characterColor,
+              showSkateboard: showSkateboard,
+            });
+          }
+          
+          // Clear any existing jump pad effect timer
+          if (jumpPadEffectTimer.current) {
+            clearTimeout(jumpPadEffectTimer.current);
+          }
+          
+          // Set timer to clear jump pad effect after a reasonable time
+          jumpPadEffectTimer.current = setTimeout(() => {
+            console.log('[CharacterController] Jump pad effect timer expired');
+            setIsAffectedByJumpPad(false);
+            isAffectedByJumpPadRef.current = false; // Clear ref as well
+            jumpPadEffectTimer.current = null;
+          }, 1000); // 1 second should be enough for most jump pad effects
+        }
+      }
+    };
+    
     return () => {
-      // Clean up global reference
+      // Clean up global references
       if (window.mobileControls) {
         delete window.mobileControls;
       }
+      if (window.jumpPadControls) {
+        delete window.jumpPadControls;
+      }
+      
+      // Clean up timers
+      if (jumpPadEffectTimer.current) {
+        clearTimeout(jumpPadEffectTimer.current);
+        jumpPadEffectTimer.current = null;
+      }
     };
-  }, []);
+  }, [myId, characterColor, showSkateboard, sendMove]);
 
   // Mouse and touch event handlers for camera rotation in third-person mode
   const handlePointerDown = useCallback((event) => {
@@ -1297,7 +1370,17 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
           
           // If we were in the air and now landed, play landing animation
           if (wasInAir.current) {
-            console.log(`[CharacterController] Landing from jump, setting animation to idle`);
+            console.log(`[CharacterController] Landing from ${isAffectedByJumpPad ? 'jump pad' : 'jump'}, checking movement for animation`);
+            
+            // Clear jump pad effect if we were affected by one
+            if (isAffectedByJumpPad) {
+              setIsAffectedByJumpPad(false);
+              isAffectedByJumpPadRef.current = false; // Clear ref as well
+              if (jumpPadEffectTimer.current) {
+                clearTimeout(jumpPadEffectTimer.current);
+                jumpPadEffectTimer.current = null;
+              }
+            }
             
             // Clear any existing jump animation timers
             if (jumpAnimationTimer.current) {
@@ -1305,79 +1388,94 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
               jumpAnimationTimer.current = null;
             }
             
-            // Force immediate animation change to idle
-            setAnimationState('idle');
-            
-            // Force immediate network update for animation change
-            sendMove({
-              position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
-              rotation: characterRotationTarget.current,
-              animation: 'idle',
-              color: characterColor,
-              showSkateboard: showSkateboard,
-            });
-            
             // Reset the wasInAir flag
             wasInAir.current = false;
             
-            // Check velocity after landing to determine if we should transition to walk/run
-            const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
-            if (horizontalSpeed > 0.1) {
-              // If we're still moving after landing, update animation in the next frame
-              setTimeout(() => {
-                // Make sure the rigid body reference is still valid
-                if (!rigidBody.current) return;
-                
-                const newSpeed = Math.sqrt(
-                  rigidBody.current.linvel().x * rigidBody.current.linvel().x + 
-                  rigidBody.current.linvel().z * rigidBody.current.linvel().z
-                );
-                
-                // Only update if we're still moving
-                if (newSpeed > 0.1) {
-                  const newAnimState = showSkateboard ? 'walk' : (newSpeed > 4 ? 'run' : 'walk');
-                  console.log(`[CharacterController] After landing, transitioning to ${newAnimState}`);
-                  
-                  setAnimationState(newAnimState);
-                  
-                  // Force immediate network update for animation change
-                  sendMove({
-                    position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
-                    rotation: characterRotationTarget.current,
-                    animation: newAnimState,
-                    color: characterColor,
-                    showSkateboard: showSkateboard,
-                  });
-                }
-              }, 100); // Shorter delay for more responsive animation
+            // Only set landing animation if we're not affected by jump pad
+            if (!isAffectedByJumpPad) {
+              // Check velocity immediately to determine landing animation
+              const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+              let landingAnimation = 'idle';
               
-              // Add a second check with longer delay as a backup
-              setTimeout(() => {
-                // Make sure the rigid body reference is still valid and we're still on ground
-                if (!rigidBody.current || !isOnGround) return;
-                
-                const currentSpeed = Math.sqrt(
-                  rigidBody.current.linvel().x * rigidBody.current.linvel().x + 
-                  rigidBody.current.linvel().z * rigidBody.current.linvel().z
-                );
-                
-                // Only update if we're still moving and not already in walk/run
-                if (currentSpeed > 0.1 && animationState !== 'walk' && animationState !== 'run') {
-                  const newAnimState = showSkateboard ? 'walk' : (currentSpeed > 4 ? 'run' : 'walk');
-                  console.log(`[CharacterController] Backup check: Still moving but not in walk/run, transitioning to ${newAnimState}`);
+              if (horizontalSpeed > 0.1) {
+                // If we're moving when we land, go directly to movement animation
+                landingAnimation = showSkateboard ? 'walk' : (horizontalSpeed > 4 ? 'run' : 'walk');
+                console.log(`[CharacterController] Landing with movement, setting animation to ${landingAnimation}`);
+              } else {
+                console.log(`[CharacterController] Landing without movement, setting animation to idle`);
+              }
+              
+              // Set the appropriate landing animation
+              setAnimationState(landingAnimation);
+              
+              // Force immediate network update for animation change
+              sendMove({
+                position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+                rotation: characterRotationTarget.current,
+                animation: landingAnimation,
+                color: characterColor,
+                showSkateboard: showSkateboard,
+              });
+              
+              // If we landed in idle but are still moving, check again after a short delay
+              if (landingAnimation === 'idle' && horizontalSpeed > 0.1) {
+                setTimeout(() => {
+                  // Make sure the rigid body reference is still valid
+                  if (!rigidBody.current) return;
                   
-                  setAnimationState(newAnimState);
+                  const newSpeed = Math.sqrt(
+                    rigidBody.current.linvel().x * rigidBody.current.linvel().x + 
+                    rigidBody.current.linvel().z * rigidBody.current.linvel().z
+                  );
                   
-                  // Force immediate network update for animation change
-                  sendMove({
-                    position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
-                    rotation: characterRotationTarget.current,
-                    animation: newAnimState,
-                    color: characterColor,
-                    showSkateboard: showSkateboard,
-                  });
-                }
-              }, 300); // Longer delay as a backup check
+                  // Only update if we're still moving and not affected by jump pad
+                  if (newSpeed > 0.1 && !isAffectedByJumpPad) {
+                    const newAnimState = showSkateboard ? 'walk' : (newSpeed > 4 ? 'run' : 'walk');
+                    console.log(`[CharacterController] After landing, transitioning to ${newAnimState}`);
+                    
+                    setAnimationState(newAnimState);
+                    
+                    // Force immediate network update for animation change
+                    sendMove({
+                      position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+                      rotation: characterRotationTarget.current,
+                      animation: newAnimState,
+                      color: characterColor,
+                      showSkateboard: showSkateboard,
+                    });
+                  }
+                }, 100); // Shorter delay for more responsive animation
+                
+                // Add a second check with longer delay as a backup
+                setTimeout(() => {
+                  // Make sure the rigid body reference is still valid and we're still on ground
+                  if (!rigidBody.current || !isOnGround) return;
+                  
+                  const currentSpeed = Math.sqrt(
+                    rigidBody.current.linvel().x * rigidBody.current.linvel().x + 
+                    rigidBody.current.linvel().z * rigidBody.current.linvel().z
+                  );
+                  
+                  // Only update if we're still moving and not already in walk/run and not affected by jump pad
+                  if (currentSpeed > 0.1 && animationState !== 'walk' && animationState !== 'run' && !isAffectedByJumpPad) {
+                    const newAnimState = showSkateboard ? 'walk' : (currentSpeed > 4 ? 'run' : 'walk');
+                    console.log(`[CharacterController] Backup check: Still moving but not in walk/run, transitioning to ${newAnimState}`);
+                    
+                    setAnimationState(newAnimState);
+                    
+                    // Force immediate network update for animation change
+                    sendMove({
+                      position: [rigidBody.current.translation().x, rigidBody.current.translation().y, rigidBody.current.translation().z],
+                      rotation: characterRotationTarget.current,
+                      animation: newAnimState,
+                      color: characterColor,
+                      showSkateboard: showSkateboard,
+                    });
+                  }
+                }, 300); // Longer delay as a backup check
+              }
+            } else {
+              console.log(`[CharacterController] Landing while affected by jump pad - keeping fall animation`);
             }
           }
         }

@@ -890,7 +890,7 @@ function endGame(io, roomId) {
 }
 
 // Start the server right away (no initialization needed)
-server.listen(3000, () => {
-  console.log('[SERVER] Listening on port 3000');
+server.listen(3006, () => {
+  console.log('[SERVER] Listening on port 3006');
   console.log('[SERVER] Race builder system ready');
 });
