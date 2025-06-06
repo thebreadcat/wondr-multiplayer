@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCameraStore } from './CameraToggleButton';
+import { FaEdit, FaStopCircle } from "react-icons/fa";
+
 
 export function EditModeButton() {
   const { isEditMode, toggleEditMode } = useCameraStore();
@@ -23,23 +25,21 @@ export function EditModeButton() {
         fontSize: '16px',
         padding: '8px 12px',
         borderRadius: '5px',
-        background: isEditMode ? '#e74c3c' : '#2ecc71',
+        background: 'transparent',
         color: 'white',
         cursor: 'pointer',
-        border: 'none',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         height: '36px',
         minWidth: '44px',
-        fontWeight: 'bold',
         transition: 'all 0.2s ease',
       }}
       title={isEditMode ? 'Exit Edit Mode' : 'Enter Edit Mode'}
       aria-label={isEditMode ? 'Exit Edit Mode' : 'Enter Edit Mode'}
     >
-      {isEditMode ? '✏️' : '🔒'}
+      {isEditMode ? <FaStopCircle /> : <FaEdit />}
     </button>
   );
 } 

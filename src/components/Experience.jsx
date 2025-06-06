@@ -15,6 +15,7 @@ import { RaceGame3D } from "../games/race";
 import JumpPad from "./JumpPad";
 import Portal from "./Portal";
 import ObjectManager from "./ObjectManager";
+import { Tree } from "./models/Tree";
 
 const maps = {
   castle_on_hills: {

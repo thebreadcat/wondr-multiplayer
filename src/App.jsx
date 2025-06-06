@@ -6,6 +6,7 @@ import { Experience } from "./components/Experience";
 import CharacterCreator from './components/CharacterCreator';
 import EmojiButton from "./components/EmojiButton";
 import { EditModeButton } from "./components/EditModeButton";
+import EditModeManager from "./components/EditModeManager";
 import CameraToggleButton from "./components/CameraToggleButton";
 import { MultiplayerProvider } from './components/MultiplayerProvider';
 import { VoiceChatProvider } from './components/VoiceChatProvider';
@@ -260,7 +261,6 @@ function App() {
               textDecoration: 'none',
               fontWeight: 'bold',
               fontSize: '18px',
-              textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
             }}
           >
             WondR
@@ -283,10 +283,6 @@ function App() {
                 setShowOverlay={setShowEmojiOverlay} 
               />
             </div>
-            <CameraToggleButton 
-              showThirdPerson={showThirdPerson} 
-              setShowThirdPerson={setShowThirdPerson} 
-            />
             <PhoneMenuButton onClick={(e) => { e.currentTarget.blur(); setShowPhoneMenu(true); }} />
             <VoiceChatControls />
           </div>
@@ -379,6 +375,9 @@ function App() {
               </div>
             </div>
           )}
+          
+          {/* Edit Mode UI Components */}
+          <EditModeManager />
         </GameSystemProvider>
       </VoiceChatProvider>
     </MultiplayerProvider>

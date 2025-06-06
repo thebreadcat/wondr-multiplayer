@@ -967,6 +967,33 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       }
     };
     
+    // Create global character controller interface for position access
+    window.characterController = {
+      getPosition: () => {
+        if (rigidBody.current) {
+          const pos = rigidBody.current.translation();
+          return [pos.x, pos.y, pos.z];
+        }
+        return currentPosition.current;
+      },
+      jump: (force = 15) => {
+        if (rigidBody.current && jumpCooldown.current <= 0) {
+          // Apply upward velocity for jump
+          const velocity = rigidBody.current.linvel();
+          velocity.y = force;
+          rigidBody.current.setLinvel(velocity, true);
+          
+          // Set jump cooldown
+          jumpCooldown.current = 0.57; // Same as regular jump
+          
+          // Trigger jump pad effect
+          if (window.jumpPadControls) {
+            window.jumpPadControls.notifyJumpPadEffect(myId);
+          }
+        }
+      }
+    };
+    
     // Create global jump pad interface
     window.jumpPadControls = {
       notifyJumpPadEffect: (playerId) => {
@@ -1010,6 +1037,9 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       // Clean up global references
       if (window.mobileControls) {
         delete window.mobileControls;
+      }
+      if (window.characterController) {
+        delete window.characterController;
       }
       if (window.jumpPadControls) {
         delete window.jumpPadControls;

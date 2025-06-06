@@ -140,7 +140,7 @@ export const PhoneMenuButton = ({ onClick }) => (
       padding: '8px 12px',
       backgroundColor: 'transparent',
       color: 'white',
-      border: 'white 2px solid',
+      border: '1px solid rgba(255, 255, 255, 0.2)',
       borderRadius: '5px',
       cursor: 'pointer',
       display: 'flex',

@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useMultiplayer } from './MultiplayerProvider';
+import { FaRegGrin, FaHourglass } from "react-icons/fa";
+
+
 
 const EMOJI_OPTIONS = ['👍', '👎', '😂', '🎉', '👋', '💯'];
 
@@ -30,10 +33,10 @@ export default function EmojiButton() {
           fontSize: '16px',
           padding: '8px 12px',
           borderRadius: '5px',
-          background: cooldown ? '#ccc' : '#fff',
+          background: 'transparent',
+          color: 'white',
           cursor: cooldown ? 'not-allowed' : 'pointer',
-          border: '1px solid #888',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -42,7 +45,7 @@ export default function EmojiButton() {
         }}
         aria-label="Open emoji menu"
       >
-        {cooldown ? '⏳' : '😊'}
+        {cooldown ? <FaHourglass /> : <FaRegGrin/>}
       </button>
       {menuOpen && (
         <div

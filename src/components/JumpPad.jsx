@@ -37,15 +37,18 @@ export default function JumpPad({ position = [0, 0, 0], baseForce = { x: 0, y: 7
     if (currentTime - lastCheckTimeRef.current > checkIntervalMs) {
       lastCheckTimeRef.current = currentTime;
       
+      // Get the actual world position of the jump pad
+      const jumpPadWorldPosition = jumpPadRef.current.translation();
+      
       // Check all players (local and remote)
       Object.entries(players).forEach(([playerId, player]) => {
         if (!player.position) return;
         
         // Check distance to jump pad using effective radius
         const playerPos = player.position;
-        const dx = playerPos[0] - position[0];
-        const dz = playerPos[2] - position[2];
-        const dy = playerPos[1] - position[1];
+        const dx = playerPos[0] - jumpPadWorldPosition.x;
+        const dz = playerPos[2] - jumpPadWorldPosition.z;
+        const dy = playerPos[1] - jumpPadWorldPosition.y;
         const distanceSquared = dx * dx + dz * dz;
         const inZone = distanceSquared <= effectiveRadius * effectiveRadius && Math.abs(dy) < 2; // Within radius and reasonable height
         

@@ -8,9 +8,9 @@ const VoiceChatButton = styled.button`
   font-size: 16px;
   padding: 8px 12px;
   border-radius: 5px;
-  background: transparent;
+  background: 'transparent';
   cursor: pointer;
-  border: 2px solid #fff;
+  border: '1px solid rgba(255, 255, 255, 0.2)',
   display: flex;
   align-items: center;
   justify-content: center;
