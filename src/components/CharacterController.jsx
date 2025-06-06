@@ -1025,7 +1025,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
 
   // Mouse and touch event handlers for camera rotation in third-person mode
   const handlePointerDown = useCallback((event) => {
-    if (isFirstPerson) return; // Don't interfere with first-person mode
+    if (isFirstPerson || isThirdPersonPointerLocked) return; // Don't interfere with first-person mode or when pointer lock is active
     
     // Get touch/mouse coordinates
     const clientX = event.touches ? event.touches[0].clientX : event.clientX;
@@ -1091,10 +1091,10 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     
     setIsMouseDown(true);
     lastMousePosition.current = { x: clientX, y: clientY };
-  }, [isFirstPerson, gl]);
+  }, [isFirstPerson, isThirdPersonPointerLocked, gl]);
 
   const handlePointerMove = useCallback((event) => {
-    if (!isMouseDown || isFirstPerson) return; // Don't interfere with first-person mode
+    if (!isMouseDown || isFirstPerson || isThirdPersonPointerLocked) return; // Don't interfere with first-person mode or when pointer lock is active
     
     event.preventDefault();
     
@@ -1120,14 +1120,14 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     cameraDistance.current = minDistance + (maxDistance - minDistance) * (1 - normalizedVerticalAngle);
 
     lastMousePosition.current = { x: clientX, y: clientY };
-  }, [isMouseDown, isFirstPerson, mouseSensitivity]);
+  }, [isMouseDown, isFirstPerson, isThirdPersonPointerLocked, mouseSensitivity]);
 
   const handlePointerUp = useCallback((event) => {
-    if (isFirstPerson) return; // Don't interfere with first-person mode
+    if (isFirstPerson || isThirdPersonPointerLocked) return; // Don't interfere with first-person mode or when pointer lock is active
     
     event.preventDefault();
     setIsMouseDown(false);
-  }, [isFirstPerson]);
+  }, [isFirstPerson, isThirdPersonPointerLocked]);
 
   // Set up mouse and touch event listeners
   useEffect(() => {
@@ -1276,7 +1276,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       canvas.removeEventListener('touchmove', handleTouchMove);
       canvas.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [isFirstPerson, handlePointerDown, handlePointerMove, handlePointerUp, gl]);
+  }, [isFirstPerson, isThirdPersonPointerLocked, handlePointerDown, handlePointerMove, handlePointerUp, gl]);
 
   // Pointer lock controls for first-person mode
   useEffect(() => {
@@ -1334,6 +1334,78 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       canvas.removeEventListener('keydown', handleKeyDown);
       
       // Exit pointer lock when component unmounts or first-person mode is disabled
+      if (document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+      }
+    };
+  }, [isFirstPerson, gl]);
+
+  // Pointer lock controls for third-person mode
+  useEffect(() => {
+    if (isFirstPerson) return; // Only for third-person mode
+    
+    const canvas = gl.domElement;
+    
+    const handlePointerLockChange = () => {
+      setIsThirdPersonPointerLocked(document.pointerLockElement === canvas);
+    };
+    
+    const handleMouseMove = (event) => {
+      if (document.pointerLockElement === canvas) {
+        // Apply sensitivity for third-person camera rotation
+        const sensitivity = 0.003;
+        
+        // Update camera rotation using the same logic as drag controls
+        rotationTarget.current -= event.movementX * sensitivity;
+        cameraVerticalAngle.current += event.movementY * sensitivity;
+
+        // Clamp vertical rotation with the same limits as drag controls
+        const maxUpAngle = Math.PI / 2.2; // ~82 degrees up
+        const maxDownAngle = -Math.PI / 12; // ~15 degrees down
+        cameraVerticalAngle.current = Math.max(maxDownAngle, Math.min(maxUpAngle, cameraVerticalAngle.current));
+
+        // Dynamic zoom based on vertical angle (same as drag controls)
+        const normalizedVerticalAngle = (cameraVerticalAngle.current - maxDownAngle) / (maxUpAngle - maxDownAngle);
+        const minDistance = 3;
+        const maxDistance = 8;
+        cameraDistance.current = minDistance + (maxDistance - minDistance) * (1 - normalizedVerticalAngle);
+      }
+    };
+    
+    const handleClick = (event) => {
+      if (!isFirstPerson && document.pointerLockElement !== canvas) {
+        event.preventDefault();
+        event.stopPropagation();
+        console.log('[CharacterController] Requesting pointer lock for third-person mode');
+        canvas.requestPointerLock().then(() => {
+          console.log('[CharacterController] Third-person pointer lock request successful');
+        }).catch((error) => {
+          console.error('[CharacterController] Third-person pointer lock request failed:', error);
+        });
+      }
+    };
+    
+    const handleKeyDown = (event) => {
+      // ESC key to release pointer lock
+      if (event.key === 'Escape' && document.pointerLockElement === canvas) {
+        document.exitPointerLock();
+      }
+    };
+    
+    // Add event listeners
+    canvas.addEventListener('click', handleClick);
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Cleanup function
+    return () => {
+      canvas.removeEventListener('click', handleClick);
+      document.removeEventListener('pointerlockchange', handlePointerLockChange);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      canvas.removeEventListener('keydown', handleKeyDown);
+      
+      // Exit pointer lock when component unmounts or third-person mode is disabled
       if (document.pointerLockElement === canvas) {
         document.exitPointerLock();
       }
@@ -1565,45 +1637,6 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
               <TagPlayerIndicator playerId={myId} />
             </group>
           </>
-        )}
-        
-        {/* Pointer lock indicator for third-person mode */}
-        {!isFirstPerson && isThirdPersonPointerLocked && (
-          <Html position={[0, 3, 0]} center>
-            <div style={{
-              background: 'rgba(0, 0, 0, 0.8)',
-              color: 'white',
-              padding: '8px 12px',
-              borderRadius: '4px',
-              fontSize: '14px',
-              fontFamily: 'Arial, sans-serif',
-              textAlign: 'center',
-              pointerEvents: 'none',
-              whiteSpace: 'nowrap'
-            }}>
-              🎮 Mouse Look Active - Press ESC to release
-            </div>
-          </Html>
-        )}
-        
-        {/* Click to activate indicator for third-person mode */}
-        {!isFirstPerson && !isThirdPersonPointerLocked && (
-          <Html position={[0, 3, 0]} center>
-            <div style={{
-              background: 'rgba(0, 0, 0, 0.6)',
-              color: 'white',
-              padding: '6px 10px',
-              borderRadius: '4px',
-              fontSize: '12px',
-              fontFamily: 'Arial, sans-serif',
-              textAlign: 'center',
-              pointerEvents: 'none',
-              whiteSpace: 'nowrap',
-              opacity: 0.7
-            }}>
-              Click to activate mouse look
-            </div>
-          </Html>
         )}
       </group>
       <CapsuleCollider args={[0.3, 0.3]} position={[0, 0.8 + VERTICAL_OFFSET, 0]} />
