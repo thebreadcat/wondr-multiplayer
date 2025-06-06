@@ -5,6 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import { Experience } from "./components/Experience";
 import CharacterCreator from './components/CharacterCreator';
 import EmojiButton from "./components/EmojiButton";
+import { EditModeButton } from "./components/EditModeButton";
 import CameraToggleButton from "./components/CameraToggleButton";
 import { MultiplayerProvider } from './components/MultiplayerProvider';
 import { VoiceChatProvider } from './components/VoiceChatProvider';
@@ -275,6 +276,7 @@ function App() {
             gap: 8, 
             alignItems: 'center',
           }}>
+            <EditModeButton />
             <div style={{ position: 'relative' }}>
               <EmojiButton 
                 showOverlay={showEmojiOverlay} 

@@ -108,6 +108,48 @@ const playersInGameZones = {};
 const playerQueues = {};
 const queueCountdowns = {};
 
+// ========== OBJECT MANAGEMENT ==========
+const roomObjects = {}; // Store objects by roomId: { roomId: [objects...] }
+
+// Helper function to get objects for a room
+function getRoomObjects(roomId) {
+  if (!roomObjects[roomId]) {
+    roomObjects[roomId] = [];
+  }
+  return roomObjects[roomId];
+}
+
+// Helper function to add object to room
+function addObjectToRoom(roomId, object) {
+  const objects = getRoomObjects(roomId);
+  objects.push(object);
+  console.log(`[SERVER] Added object ${object.id} to room ${roomId}. Total objects: ${objects.length}`);
+}
+
+// Helper function to update object in room
+function updateObjectInRoom(roomId, objectId, updates) {
+  const objects = getRoomObjects(roomId);
+  const objectIndex = objects.findIndex(obj => obj.id === objectId);
+  if (objectIndex !== -1) {
+    objects[objectIndex] = { ...objects[objectIndex], ...updates };
+    console.log(`[SERVER] Updated object ${objectId} in room ${roomId}`);
+    return true;
+  }
+  return false;
+}
+
+// Helper function to remove object from room
+function removeObjectFromRoom(roomId, objectId) {
+  const objects = getRoomObjects(roomId);
+  const objectIndex = objects.findIndex(obj => obj.id === objectId);
+  if (objectIndex !== -1) {
+    objects.splice(objectIndex, 1);
+    console.log(`[SERVER] Removed object ${objectId} from room ${roomId}. Remaining objects: ${objects.length}`);
+    return true;
+  }
+  return false;
+}
+
 // ========== GAME CONFIGS ==========
 const { tagConfig } = require('./src/games/tag/config');
 
@@ -246,17 +288,17 @@ io.on('connection', (socket) => {
     
     // Validate that the player is actually in the game
     if (!game.players.includes(playerId)) {
-      console.log(`[SERVER] ⛔ REJECTED: Player ${playerId.substring(0, 6)} is not a player in this game`);
+      console.log(`[SERVER] ⛔ REJECTED: Player ${playerId ? playerId.substring(0, 6) : 'null'} is not a player in this game`);
       return;
     }
     
     // If the player is already IT, no need to change anything
     if (game.taggedPlayerId === playerId) {
-      console.log(`[SERVER] Player ${playerId.substring(0, 6)} is already IT, no change needed`);
+      console.log(`[SERVER] Player ${playerId ? playerId.substring(0, 6) : 'null'} is already IT, no change needed`);
       return;
     }
     
-    console.log(`[SERVER] 🔄 PENALTY: Player ${playerId.substring(0, 6)} jumped off map and is now IT`);
+    console.log(`[SERVER] 🔄 PENALTY: Player ${playerId ? playerId.substring(0, 6) : 'null'} jumped off map and is now IT`);
     
     // Update the tagged player to be the one who jumped off
     game.taggedPlayerId = playerId;
@@ -294,7 +336,7 @@ io.on('connection', (socket) => {
       taggedPlayerId: playerId
     });
     
-    console.log(`[SERVER] ✅ SUCCESS: Player ${playerId.substring(0, 6)} is now IT due to penalty in ${actualRoomId}`);
+    console.log(`[SERVER] ✅ SUCCESS: Player ${playerId ? playerId.substring(0, 6) : 'null'} is now IT due to penalty in ${actualRoomId}`);
   });
 
   socket.on('tagPlayer', (data) => {
@@ -439,7 +481,7 @@ io.on('connection', (socket) => {
       if (game.players.length > 0) {
         const randomPlayer = game.players[Math.floor(Math.random() * game.players.length)];
         game.taggedPlayerId = randomPlayer;
-        console.log(`[SERVER] 🎲 Selected random player ${randomPlayer.substring(0, 6)} as IT instead`);
+        console.log(`[SERVER] 🎲 Selected random player ${randomPlayer ? randomPlayer.substring(0, 6) : 'null'} as IT instead`);
       }
     } else {
       // Normal update - tagged player is valid
@@ -570,16 +612,83 @@ io.on('connection', (socket) => {
 
   // Handle voice activity updates
   socket.on('voice-activity', (data) => {
-    const { playerId, isActive } = data;
+    // More robust data extraction with null checks
+    const { playerId, isActive } = data || {};
     
-    // Only log when activity starts to avoid spam, with null check
-    if (isActive && playerId) {
-      const playerShort = playerId.substring(0, 6);
+    // Ensure playerId is a valid string before calling substring
+    const playerShort = (playerId && typeof playerId === 'string') 
+      ? playerId.substring(0, 6) 
+      : 'unknown';
+    
+    if (isActive) {
       console.log(`[SERVER] 🗣️ Voice activity from ${playerShort}`);
     }
     
-    // Broadcast voice activity to all other clients
-    socket.broadcast.emit('voice-activity', { playerId, isActive });
+    // Only broadcast if we have valid data
+    if (playerId && typeof playerId === 'string') {
+      // Broadcast voice activity to all other clients
+      socket.broadcast.emit('voice-activity', { playerId, isActive });
+    }
+  });
+
+  // ========== OBJECT MANAGEMENT HANDLERS ==========
+  
+  // Handle request for objects in a room
+  socket.on('request-objects', (data) => {
+    const { roomId } = data;
+    if (!roomId) return;
+    
+    const objects = getRoomObjects(roomId);
+    console.log(`[SERVER] Sending ${objects.length} objects to client for room ${roomId}`);
+    socket.emit('objects-sync', objects);
+  });
+
+  // Handle adding new object
+  socket.on('add-object', (objectData) => {
+    const { roomId } = objectData;
+    if (!roomId || !objectData.id) return;
+    
+    // Add object to room storage
+    addObjectToRoom(roomId, objectData);
+    
+    // Broadcast to all clients in the room (including sender for confirmation)
+    io.emit('object-added', objectData);
+    
+    console.log(`[SERVER] Object ${objectData.id} added to room ${roomId} by ${socket.id.substring(0, 6)}`);
+  });
+
+  // Handle updating existing object
+  socket.on('update-object', (data) => {
+    const { objectId, updates, roomId } = data;
+    if (!objectId || !updates || !roomId) return;
+    
+    // Update object in room storage
+    const success = updateObjectInRoom(roomId, objectId, updates);
+    
+    if (success) {
+      // Broadcast to all clients in the room
+      io.emit('object-updated', { objectId, updates, roomId });
+      console.log(`[SERVER] Object ${objectId} updated in room ${roomId} by ${socket.id.substring(0, 6)}`);
+    } else {
+      console.log(`[SERVER] Failed to update object ${objectId} in room ${roomId} - object not found`);
+    }
+  });
+
+  // Handle deleting object
+  socket.on('delete-object', (data) => {
+    const { objectId, roomId } = data;
+    if (!objectId || !roomId) return;
+    
+    // Remove object from room storage
+    const success = removeObjectFromRoom(roomId, objectId);
+    
+    if (success) {
+      // Broadcast to all clients in the room
+      io.emit('object-deleted', { objectId, roomId });
+      console.log(`[SERVER] Object ${objectId} deleted from room ${roomId} by ${socket.id.substring(0, 6)}`);
+    } else {
+      console.log(`[SERVER] Failed to delete object ${objectId} from room ${roomId} - object not found`);
+    }
   });
 
   socket.on('disconnect', () => {
@@ -690,7 +799,7 @@ io.on('connection', (socket) => {
         const taggedSocket = io.sockets.sockets.get(game.taggedPlayerId);
         if (!taggedSocket || !taggedSocket.connected) {
           // Tagged player disconnected, select a new one
-          console.log(`⚠️ [SERVER] Tagged player ${game.taggedPlayerId.substring(0, 6)} is no longer connected!`);
+          console.log(`⚠️ [SERVER] Tagged player ${game.taggedPlayerId ? game.taggedPlayerId.substring(0, 6) : 'null'} is no longer connected!`);
           
           // Filter for currently connected players
           const validPlayers = game.players.filter(playerId => {
@@ -701,7 +810,7 @@ io.on('connection', (socket) => {
           if (validPlayers.length > 0) {
             // Pick a new player to be IT
             game.taggedPlayerId = validPlayers[Math.floor(Math.random() * validPlayers.length)];
-            console.log(`👑 [SERVER] Selected new IT player: ${game.taggedPlayerId.substring(0, 6)}`);
+            console.log(`👑 [SERVER] Selected new IT player: ${game.taggedPlayerId ? game.taggedPlayerId.substring(0, 6) : 'null'}`);
           }
         }
       }
@@ -743,7 +852,7 @@ function startGame(io, gameType, players, roomId) {
   
   // Select a random connected player to be IT
   const taggedPlayerId = validPlayers[Math.floor(Math.random() * validPlayers.length)];
-  console.log(`👑 [SERVER] Selected ${taggedPlayerId.substring(0, 6)} as IT from ${validPlayers.length} valid players`);
+  console.log(`👑 [SERVER] Selected ${taggedPlayerId ? taggedPlayerId.substring(0, 6) : 'null'} as IT from ${validPlayers.length} valid players`);
 
   activeGames[roomId] = {
     gameType,
@@ -767,7 +876,7 @@ function startGame(io, gameType, players, roomId) {
   players.forEach(playerId => {
     const playerSocket = io.sockets.sockets.get(playerId);
     if (playerSocket) {
-      console.log(`[SERVER] 📣 Sending game start to player ${playerId.substring(0, 6)}`);
+      console.log(`[SERVER] 📣 Sending game start to player ${playerId ? playerId.substring(0, 6) : 'null'}`);
       playerSocket.emit('gameStart', {
         roomId,
         gameType,
@@ -805,7 +914,7 @@ function endGame(io, roomId) {
     return;
   }
   
-  console.log(`[SERVER] Game has ${game.players.length} players and tagged player is ${game.taggedPlayerId?.substring(0, 6)}`);
+  console.log(`[SERVER] Game has ${game.players.length} players and tagged player is ${game.taggedPlayerId ? game.taggedPlayerId.substring(0, 6) : 'null'}`);
   
   // Mark game as ended but keep the game object for ceremony/UI purposes
   game.state = 'ended';
@@ -815,7 +924,7 @@ function endGame(io, roomId) {
   game.players.forEach(playerId => {
     const playerSocket = io.sockets.sockets.get(playerId);
     if (playerSocket) {
-      console.log(`[SERVER] 📣 Sending game end to player ${playerId.substring(0, 6)}`);
+      console.log(`[SERVER] 📣 Sending game end to player ${playerId ? playerId.substring(0, 6) : 'null'}`);
       playerSocket.emit('gameEnded', {
         roomId,
         gameType: game.gameType,
@@ -890,7 +999,7 @@ function endGame(io, roomId) {
 }
 
 // Start the server right away (no initialization needed)
-server.listen(3006, () => {
-  console.log('[SERVER] Listening on port 3006');
+server.listen(3000, () => {
+  console.log('[SERVER] Listening on port 3000');
   console.log('[SERVER] Race builder system ready');
 });

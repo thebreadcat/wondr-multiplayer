@@ -1,26 +1,22 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 import { useVoiceChat } from './VoiceChatProvider';
+import { FaMicrophone, FaMicrophoneSlash } from 'react-icons/fa';
 import { useMultiplayer } from './MultiplayerProvider';
 
 const VoiceChatButton = styled.button`
   font-size: 16px;
   padding: 8px 12px;
   border-radius: 5px;
-  background: ${props => {
-    if (!props.isEnabled) return '#fff';
-    if (props.isMuted) return '#F44336';
-    return '#4CAF50';
-  }};
+  background: transparent;
   cursor: pointer;
-  border: 1px solid #888;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  border: 2px solid #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   height: 36px;
   min-width: 44px;
-  color: ${props => props.isEnabled ? 'white' : 'black'};
+  color: white;
   transition: all 0.2s ease;
 
   &:hover {
@@ -244,7 +240,7 @@ export default function VoiceChatControls() {
         isMuted={isMuted}
         title={isVoiceChatEnabled ? (isMuted ? 'Unmute microphone' : 'Voice chat active') : 'Start voice chat'}
       >
-        {!isVoiceChatEnabled ? '🎤' : (isMuted ? '🔇' : '🎤')}
+        {!isVoiceChatEnabled ? <FaMicrophone/> : (isMuted ? <FaMicrophoneSlash/> : <FaMicrophone/>)}
       </VoiceChatButton>
 
       {showModal && isVoiceChatEnabled && (

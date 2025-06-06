@@ -14,6 +14,7 @@ import TagGameRefactored from "../games/tag/TagGameRefactored";
 import { RaceGame3D } from "../games/race";
 import JumpPad from "./JumpPad";
 import Portal from "./Portal";
+import ObjectManager from "./ObjectManager";
 
 const maps = {
   castle_on_hills: {
@@ -167,6 +168,9 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
               rotationB={[0, -Math.PI / 2, 0]} // Face west (-90 degrees Y rotation)
               radius={1.2}
             />
+            
+            {/* Object Manager for Tag Game */}
+            <ObjectManager roomId={activeTagGame[0] || sharedRoomId} />
           </>
         ) : (
           <>
@@ -206,6 +210,9 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
               rotationB={[0, -Math.PI / 2, 0]} // Face west (-90 degrees Y rotation)
               radius={1.2}
             />
+            
+            {/* Object Manager for Normal Game */}
+            <ObjectManager roomId={sharedRoomId} />
           </>
         )}
       </Physics>

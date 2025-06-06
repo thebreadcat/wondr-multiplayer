@@ -5,7 +5,12 @@ import { create } from 'zustand';
 export const useCameraStore = create((set) => ({
   isFirstPerson: false,
   setFirstPerson: (value) => set({ isFirstPerson: value }),
-  toggleView: () => set((state) => ({ isFirstPerson: !state.isFirstPerson }))
+  toggleView: () => set((state) => ({ isFirstPerson: !state.isFirstPerson })),
+  
+  // Edit mode state
+  isEditMode: false,
+  setEditMode: (value) => set({ isEditMode: value }),
+  toggleEditMode: () => set((state) => ({ isEditMode: !state.isEditMode }))
 }));
 
 export default function CameraToggleButton() {

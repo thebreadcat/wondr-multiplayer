@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { FaPhone, FaHome, FaGamepad, FaUser, FaCog, FaTimes, FaSnowboarding, FaVideo, FaEye } from 'react-icons/fa';
 import { useCameraStore } from './CameraToggleButton';
 import './PhoneMenu.css';
+import { useMultiplayer } from './MultiplayerProvider';
+import { GameSystemContext } from './GameSystemProvider';
+import { getSocket } from '../utils/socketManager';
+import ObjectsTab from './ObjectsTab';
 
 // Tab content components
 const HomeTab = ({ onCustomizeClick, onCloseMenu, onToggleSkateboard, showSkateboard }) => {
@@ -134,15 +138,14 @@ export const PhoneMenuButton = ({ onClick }) => (
     style={{
       fontSize: '16px',
       padding: '8px 12px',
-      backgroundColor: '#3498db',
+      backgroundColor: 'transparent',
       color: 'white',
-      border: 'none',
+      border: 'white 2px solid',
       borderRadius: '5px',
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
       height: '36px',
       minWidth: '44px',
     }}
@@ -170,6 +173,8 @@ const PhoneMenu = ({ isOpen, onClose, onCustomizeClick, onToggleSkateboard, show
         );
       case 'games':
         return <GamesTab />;
+      case 'objects':
+        return <ObjectsTab />;
       case 'profile':
         return <ProfileTab onCustomizeClick={onCustomizeClick} />;
       case 'settings':
@@ -243,86 +248,88 @@ const PhoneMenu = ({ isOpen, onClose, onCustomizeClick, onToggleSkateboard, show
           </div>
 
           {/* Phone Navigation */}
-          <div className="phone-navigation">
-            <button 
-              className={`nav-button ${activeTab === 'home' ? 'active' : ''}`}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-around',
+            alignItems: 'center',
+            padding: '10px 0',
+            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+            backgroundColor: 'rgba(0, 0, 0, 0.3)',
+          }}>
+            <button
               onClick={() => setActiveTab('home')}
               style={{
-                flex: 1,
-                padding: '15px 0',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
                 background: 'none',
                 border: 'none',
+                color: activeTab === 'home' ? '#4CAF50' : 'rgba(255, 255, 255, 0.7)',
+                fontSize: '24px',
                 cursor: 'pointer',
-                color: activeTab === 'home' ? '#3498db' : '#777',
-                borderTop: activeTab === 'home' ? '3px solid #3498db' : '3px solid transparent'
+                padding: '10px',
+                borderRadius: '50%',
+                transition: 'all 0.2s ease',
               }}
             >
-              <FaHome size={20} />
-              <span style={{ fontSize: '12px', marginTop: '5px' }}>Home</span>
+              🏠
             </button>
-            <button 
-              className={`nav-button ${activeTab === 'games' ? 'active' : ''}`}
+            <button
               onClick={() => setActiveTab('games')}
               style={{
-                flex: 1,
-                padding: '15px 0',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
                 background: 'none',
                 border: 'none',
+                color: activeTab === 'games' ? '#4CAF50' : 'rgba(255, 255, 255, 0.7)',
+                fontSize: '24px',
                 cursor: 'pointer',
-                color: activeTab === 'games' ? '#3498db' : '#777',
-                borderTop: activeTab === 'games' ? '3px solid #3498db' : '3px solid transparent'
+                padding: '10px',
+                borderRadius: '50%',
+                transition: 'all 0.2s ease',
               }}
             >
-              <FaGamepad size={20} />
-              <span style={{ fontSize: '12px', marginTop: '5px' }}>Games</span>
+              🎮
             </button>
-            <button 
-              className={`nav-button ${activeTab === 'profile' ? 'active' : ''}`}
+            <button
+              onClick={() => setActiveTab('objects')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: activeTab === 'objects' ? '#4CAF50' : 'rgba(255, 255, 255, 0.7)',
+                fontSize: '24px',
+                cursor: 'pointer',
+                padding: '10px',
+                borderRadius: '50%',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              📦
+            </button>
+            <button
               onClick={() => setActiveTab('profile')}
               style={{
-                flex: 1,
-                padding: '15px 0',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
                 background: 'none',
                 border: 'none',
+                color: activeTab === 'profile' ? '#4CAF50' : 'rgba(255, 255, 255, 0.7)',
+                fontSize: '24px',
                 cursor: 'pointer',
-                color: activeTab === 'profile' ? '#3498db' : '#777',
-                borderTop: activeTab === 'profile' ? '3px solid #3498db' : '3px solid transparent'
+                padding: '10px',
+                borderRadius: '50%',
+                transition: 'all 0.2s ease',
               }}
             >
-              <FaUser size={20} />
-              <span style={{ fontSize: '12px', marginTop: '5px' }}>Profile</span>
+              👤
             </button>
-            <button 
-              className={`nav-button ${activeTab === 'settings' ? 'active' : ''}`}
+            <button
               onClick={() => setActiveTab('settings')}
               style={{
-                flex: 1,
-                padding: '15px 0',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
                 background: 'none',
                 border: 'none',
+                color: activeTab === 'settings' ? '#4CAF50' : 'rgba(255, 255, 255, 0.7)',
+                fontSize: '24px',
                 cursor: 'pointer',
-                color: activeTab === 'settings' ? '#3498db' : '#777',
-                borderTop: activeTab === 'settings' ? '3px solid #3498db' : '3px solid transparent'
+                padding: '10px',
+                borderRadius: '50%',
+                transition: 'all 0.2s ease',
               }}
             >
-              <FaCog size={20} />
-              <span style={{ fontSize: '12px', marginTop: '5px' }}>Settings</span>
+              ⚙️
             </button>
           </div>
         </div>
