@@ -16,6 +16,7 @@ import JumpPad from "./JumpPad";
 import Portal from "./Portal";
 import ObjectManager from "./ObjectManager";
 import { Tree } from "./models/Tree";
+import { IceRink } from "./IceRink";
 
 const maps = {
   castle_on_hills: {
@@ -172,6 +173,7 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
             
             {/* Object Manager for Tag Game */}
             <ObjectManager roomId={activeTagGame[0] || sharedRoomId} />
+            
           </>
         ) : (
           <>
@@ -214,6 +216,7 @@ export const Experience = React.memo(({ characterColor, showRaceGame, raceRoomId
             
             {/* Object Manager for Normal Game */}
             <ObjectManager roomId={sharedRoomId} />
+            
           </>
         )}
       </Physics>

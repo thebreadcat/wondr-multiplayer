@@ -404,6 +404,12 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
       currentSpeed *= mobileSpeedMultiplier;
     }
 
+    // Apply ice physics modifiers if active
+    if (window.icePhysicsActive && window.icePhysicsActive.playerId === myId) {
+      console.log('🧊 Applying ice movement modifiers:', window.icePhysicsActive);
+      currentSpeed *= window.icePhysicsActive.maxSpeedMultiplier; // Can go faster but harder to control
+    }
+
     // Handle movement differently based on camera mode
     if (isFirstPerson) {
       if (isPointerLocked) {
@@ -527,8 +533,27 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     }
 
     if (isMoving) {
-      velocity.x = movement.x * currentSpeed;
-      velocity.z = movement.z * currentSpeed;
+      // Apply ice physics modifiers for acceleration
+      let accelerationMultiplier = 1.0;
+      if (window.icePhysicsActive && window.icePhysicsActive.playerId === myId) {
+        accelerationMultiplier = window.icePhysicsActive.accelerationMultiplier;
+        console.log('🧊 Reducing acceleration on ice:', accelerationMultiplier);
+      }
+
+      // Apply movement with ice physics consideration
+      const targetVelocityX = movement.x * currentSpeed;
+      const targetVelocityZ = movement.z * currentSpeed;
+      
+      // On ice, blend towards target velocity more slowly (reduced acceleration)
+      if (window.icePhysicsActive && window.icePhysicsActive.playerId === myId) {
+        // Gradual acceleration on ice
+        velocity.x = velocity.x + (targetVelocityX - velocity.x) * accelerationMultiplier;
+        velocity.z = velocity.z + (targetVelocityZ - velocity.z) * accelerationMultiplier;
+      } else {
+        // Normal movement - immediate velocity change
+        velocity.x = targetVelocityX;
+        velocity.z = targetVelocityZ;
+      }
       
       // Set animation state based on skateboard status (but don't override jump pad animations)
       if (isOnGround && !isAffectedByJumpPad) {
@@ -548,14 +573,27 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
         }
       }
     } else {
-      // Apply friction to slow down when no movement input
-      velocity.x *= 0.8;
-      velocity.z *= 0.8;
+      // Apply ice physics modifiers for deceleration when not moving
+      let decelerationMultiplier = 0.8; // Normal deceleration
+      if (window.icePhysicsActive && window.icePhysicsActive.playerId === myId) {
+        decelerationMultiplier = window.icePhysicsActive.decelerationMultiplier;
+        console.log('🧊 Reducing deceleration on ice:', decelerationMultiplier);
+        
+        // On ice, preserve momentum by applying much less friction
+        // This allows the character to continue sliding in their previous direction
+        velocity.x *= decelerationMultiplier;
+        velocity.z *= decelerationMultiplier;
+      } else {
+        // Normal ground - apply standard friction
+        velocity.x *= decelerationMultiplier;
+        velocity.z *= decelerationMultiplier;
+      }
       
       // Check if we're actually moving (not just from momentum) before setting idle
-      const isMoving = Math.abs(velocity.x) > 0.1 || Math.abs(velocity.z) > 0.1;
+      const currentSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+      const isStillMoving = currentSpeed > 0.1;
       
-      if (isOnGround && !isMoving && !isAffectedByJumpPad) {
+      if (isOnGround && !isStillMoving && !isAffectedByJumpPad) {
         // Set to idle if we're truly stopped (but don't override jump pad animations)
         if (animationState !== "idle") {
           console.log(`[CharacterController] Setting animation to idle from ${animationState}`);
@@ -570,13 +608,13 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
             showSkateboard: showSkateboard,
           });
         }
-      } else if (isOnGround && isMoving && !isAffectedByJumpPad) {
+      } else if (isStillMoving) {
         // We're still moving from momentum, keep the walk animation (but don't override jump pad animations)
         const movementSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
         const newAnimState = showSkateboard ? "walk" : (movementSpeed > 4 ? "run" : "walk");
         
-        if (animationState !== newAnimState) {
-          console.log(`[CharacterController] Setting animation to ${newAnimState} from ${animationState}`);
+        if (animationState !== newAnimState && !isAffectedByJumpPad) {
+          console.log(`[CharacterController] Setting animation to ${newAnimState} from ${animationState} (momentum sliding)`);
           setAnimationState(newAnimState);
           
           // Force immediate network update for animation change
@@ -969,6 +1007,7 @@ export function CharacterController({ initialPosition = [0, 0, 0], characterColo
     
     // Create global character controller interface for position access
     window.characterController = {
+      rigidBody: rigidBody, // Add rigidBody reference for ice physics
       getPosition: () => {
         if (rigidBody.current) {
           const pos = rigidBody.current.translation();

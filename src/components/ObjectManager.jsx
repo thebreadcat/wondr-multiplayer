@@ -8,6 +8,7 @@ import { useMultiplayer } from './MultiplayerProvider';
 import { useCameraStore } from './CameraToggleButton';
 import { Tree } from './models/Tree';
 import JumpPad from './JumpPad';
+import { IceRink } from './IceRink';
 
 // Object types that can be placed
 const OBJECT_TYPES = [
@@ -16,9 +17,9 @@ const OBJECT_TYPES = [
   { id: 'cylinder', name: 'Cylinder', color: '#2ecc71', icon: '🥫' },
   { id: 'cone', name: 'Cone', color: '#f39c12', icon: '🔺' },
   { id: 'torus', name: 'Torus', color: '#9b59b6', icon: '🍩' },
-  { id: 'plane', name: 'Plane', color: '#95a5a6', icon: '📄' },
   { id: 'tree', name: 'Tree', color: '#27ae60', icon: '🌴' },
-  { id: 'jumppad', name: 'Jump Pad', color: '#ff6b6b', icon: '🚀' }
+  { id: 'jumppad', name: 'Jump Pad', color: '#ff6b6b', icon: '🚀' },
+  { id: 'icerink', name: 'Ice Rink', color: '#87CEEB', icon: '⛸️' },
 ];
 
 // Individual object component
@@ -149,6 +150,35 @@ const RoomObject = React.forwardRef(({ object, onUpdate, onDelete, isSelected, o
             userData={{ type: 'room-object', id: object.id, jumpPad: true }}
           >
             <cylinderGeometry args={[1.5, 1.5, 0.1, 16]} />
+            <meshBasicMaterial color="#ffff00" wireframe transparent opacity={0.3} />
+          </mesh>
+        )}
+      </group>
+    );
+  }
+
+  // Special handling for ice rink objects
+  if (object.type === 'icerink') {
+    return (
+      <group 
+        ref={groupRef}
+        position={object.position}
+        rotation={object.rotation}
+        scale={object.scale}
+        onClick={handleClick}
+        userData={{ type: 'room-object', id: object.id }}
+      >
+        <IceRink 
+          position={[0, 0, 0]} // Position relative to group
+          radius={1.8} // Use standard radius like jump pad
+          mini={false}
+        />
+        {isSelected && (
+          <mesh 
+            position={[0, 0.5, 0]} // Position relative to group
+            userData={{ type: 'room-object', id: object.id, iceRink: true }}
+          >
+            <cylinderGeometry args={[2.1, 2.1, 0.1, 16]} />
             <meshBasicMaterial color="#ffff00" wireframe transparent opacity={0.3} />
           </mesh>
         )}
