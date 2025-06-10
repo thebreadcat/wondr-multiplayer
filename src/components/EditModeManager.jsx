@@ -3,6 +3,7 @@ import { useCameraStore } from './CameraToggleButton';
 import EditModePanel from './EditModePanel';
 import AddObjectModal from './AddObjectModal';
 import AddObjectButton from './AddObjectButton';
+import * as THREE from 'three';
 
 const EditModeManager = () => {
   const { isEditMode } = useCameraStore();
@@ -47,16 +48,21 @@ const EditModeManager = () => {
     setIsModalOpen(false);
   };
 
-  const handleAddObject = (objectType, position) => {
+  const handleAddObject = (objectType) => {
+    // Get current player position and calculate position in front of player
+    const currentPlayerPosition = window.characterController?.getPosition() || playerPosition;
+    
+    // Calculate position in front of player (2 units forward)
+    // Use a simple forward calculation based on current rotation
+    const offsetDistance = 2.5;
+    const frontPosition = [
+      currentPlayerPosition[0] - Math.sin(playerRotation) * offsetDistance,
+      currentPlayerPosition[1], // Same height as player
+      currentPlayerPosition[2] - Math.cos(playerRotation) * offsetDistance
+    ];
+    
+    // Add object
     if (window.objectManager) {
-      // Calculate position in front of player to avoid getting trapped
-      const offsetDistance = 2.5; // Distance in front of player
-      const frontPosition = [
-        playerPosition[0] - Math.sin(playerRotation) * offsetDistance,
-        playerPosition[1], // Same height as player
-        playerPosition[2] - Math.cos(playerRotation) * offsetDistance
-      ];
-      
       window.objectManager.addObject(objectType, frontPosition);
     }
   };

@@ -95,8 +95,14 @@ const RoomObject = React.forwardRef(({ object, onUpdate, onDelete, isSelected, o
     if (isEditMode) {
       return treeContent;
     } else {
+      // Scale the collider args by the object's scale
+      const scaleX = object.scale[0] || 1;
+      const scaleY = object.scale[1] || 1;
+      const scaleZ = object.scale[2] || 1;
+      const colliderArgs = [112.5 * scaleX, 225 * scaleY, 112.5 * scaleZ];
+      
       return (
-        <RigidBody type="fixed" colliders="cuboid" args={[112.5, 225, 112.5]} position={object.position} rotation={object.rotation}>
+        <RigidBody type="fixed" colliders="cuboid" args={colliderArgs} position={object.position} rotation={object.rotation}>
           <group
             ref={groupRef}
             scale={object.scale}
@@ -179,6 +185,7 @@ const RoomObject = React.forwardRef(({ object, onUpdate, onDelete, isSelected, o
   if (isEditMode) {
     return meshContent;
   } else {
+    // Use default hull collider for regular objects
     return (
       <RigidBody type="fixed" colliders="hull">
         {meshContent}
@@ -199,6 +206,7 @@ const ObjectManager = ({ roomId = 'main-room' }) => {
   const [transformMode, setTransformMode] = useState('translate');
   const [isTransforming, setIsTransforming] = useState(false);
   const [originalTransform, setOriginalTransform] = useState(null);
+  const [originalScaleRatio, setOriginalScaleRatio] = useState(null);
   const transformControlsRef = useRef();
   const selectedObjectRef = useRef();
 
@@ -299,7 +307,7 @@ const ObjectManager = ({ roomId = 'main-room' }) => {
     };
   }, [roomId, selectedObjectId]);
 
-  // Add new object
+  // Add new object (simplified without collider type)
   const addObject = useCallback((objectType, position = [0, 1, 0]) => {
     const newObject = {
       id: `object_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -364,6 +372,25 @@ const ObjectManager = ({ roomId = 'main-room' }) => {
     if (!selectedObjectRef.current || !selectedObjectId || !isTransforming) return;
     
     const object = selectedObjectRef.current;
+    
+    // For scale mode, maintain uniform scaling
+    if (transformMode === 'scale' && originalScaleRatio) {
+      // Get the maximum scale change from any axis
+      const scaleX = object.scale.x / originalScaleRatio.x;
+      const scaleY = object.scale.y / originalScaleRatio.y;
+      const scaleZ = object.scale.z / originalScaleRatio.z;
+      
+      // Use the largest scale change and apply it uniformly
+      const uniformScale = Math.max(scaleX, scaleY, scaleZ);
+      
+      // Apply uniform scale while maintaining original ratios
+      object.scale.set(
+        originalScaleRatio.x * uniformScale,
+        originalScaleRatio.y * uniformScale,
+        originalScaleRatio.z * uniformScale
+      );
+    }
+    
     const updates = {
       position: [object.position.x, object.position.y, object.position.z],
       rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
@@ -376,7 +403,7 @@ const ObjectManager = ({ roomId = 'main-room' }) => {
         ? { ...obj, ...updates }
         : obj
     ));
-  }, [selectedObjectId, isTransforming]);
+  }, [selectedObjectId, isTransforming, transformMode, originalScaleRatio]);
 
   const handleTransformStart = useCallback(() => {
     setIsTransforming(true);
@@ -389,12 +416,20 @@ const ObjectManager = ({ roomId = 'main-room' }) => {
         rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
         scale: [object.scale.x, object.scale.y, object.scale.z]
       });
+      
+      // Store original scale ratios for uniform scaling
+      setOriginalScaleRatio({
+        x: object.scale.x,
+        y: object.scale.y,
+        z: object.scale.z
+      });
     }
   }, []);
 
   const handleTransformEnd = useCallback(() => {
     // Don't automatically save - wait for user confirmation
     setIsTransforming(false);
+    setOriginalScaleRatio(null);
   }, []);
 
   // Confirm transform changes
@@ -430,6 +465,7 @@ const ObjectManager = ({ roomId = 'main-room' }) => {
       ));
       
       setOriginalTransform(null);
+      setOriginalScaleRatio(null);
     }
   }, [selectedObjectId, originalTransform]);
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { FaSearch, FaTimes, FaCube, FaCircle, FaSquare } from 'react-icons/fa';
+import { FaSearch, FaTimes } from 'react-icons/fa';
 
 const AddObjectModal = ({ isOpen, onClose, onAddObject, playerPosition }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -148,7 +148,6 @@ const AddObjectModal = ({ isOpen, onClose, onAddObject, playerPosition }) => {
                 e.target.style.background = 'rgba(255, 255, 255, 0.1)';
                 e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
               }}
-              autoFocus
             />
           </div>
         </div>
